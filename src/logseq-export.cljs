@@ -27,7 +27,7 @@
 (defn slurp
   [file]
   (println (str "Loading file " file))
-  (fs/readFileSync file))
+  (fs/readFileSync file #js {:encoding "utf-8"}))
 
 (defn exists?
   [file]
@@ -42,8 +42,10 @@
 
 (def exporter-config
   (when (exists? config-file)
-    (println (str "Loading config file " config-file " ..."))
-    (edn/read-string (.readFileSync fs config-file "utf8"))))
+    (edn/read-string (slurp config-file))))
+
+(def verbose-mode?
+  (get exporter-config :verbose))
 
 ;; graph utils
 (defn get-graph-paths
@@ -84,17 +86,33 @@
         day (format-date (t/day date))]
     (str year "-" month "-" day)))
 
+(defn- setup-outdir
+  []
+  (let [output-dir (get exporter-config :output-dir)
+        subfolders ["pages" "assets"]]
+    (when (not (exists? output-dir))
+      (fs/mkdirSync output-dir)
+      (dorun
+       (map #(fs/mkdirSync (str output-dir "/" %)) subfolders)))))
+
 (defn- store-page
-  [page-blocks]
-  ;; (println page-blocks)
-  )
+  [page-data]
+  (let [output-dir-base (get exporter-config :output-dir)
+        has-namespace? ( get page-data :has-namespace)
+        output-dir (if has-namespace?
+                         (str output-dir-base "/pages/" (get page-data :namespace))
+                         (str output-dir-base "/pages"))
+        full-file-name (str output-dir "/" (get page-data :filename))]
+    (when has-namespace?
+      (fs/mkdirSync output-dir #js {:recursive true}))
+    (fs/writeFileSync full-file-name (get page-data :data))))
 
 (defn- convert-filename
   [filename]
   (let [replace-pattern #"([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])"]
     (s/replace filename replace-pattern "")))
 
-(defn- parse-property-value
+(defn- parse-property-value-list
   [property-value]
   (let [string-value? (string? property-value)
         object-value? (try
@@ -117,56 +135,65 @@
                       (str property-value)))]
     (str value-lines)))
 
-(defn- parse-property
-  [property]
-  (str (s/replace (str (key property)) ":" "") ": " (parse-property-value (val property))))
-
 (defn- parse-meta-data
-  [graph-db, page]
+  [page]
   (let [original-name (get page :block/original-name)
         namespace? (and (true? (get exporter-config :trim-namespaces)) (s/includes? original-name "/"))
-        title (or (and namespace? (last (s/split original-name "/"))) original-name)
         namespace (when namespace? (let [tokens (s/split original-name "/")]
                                      (s/join "/" (subvec tokens 0 (- (count tokens) 1)))))
-        file (convert-filename title)
+        title (or (and namespace? (last (s/split original-name "/"))) original-name)
+        file (str (convert-filename title) ".md")
         excluded-properties (get exporter-config :excluded-properties)
         properties (into {} (filter #(not (contains? excluded-properties (first %))) (get page :block/properties)))
-        properties? (> (count properties) 0)
         tags (get properties :tags)
         categories (get properties :categories)
         created-at (hugo-date (get page :block/created-at))
         updated-at (hugo-date (get page :block/updated-at))
-        property-data-lines (into [] (map #(parse-property %) properties))
-        property-data-delimiter (str "---")
-        property-data (and properties? (s/join "\n" (cons property-data-delimiter (conj property-data-lines, property-data-delimiter))))]
-    (println "======================================")
-    (println (str "Title: " title))
-    (println (str "Namespace?: " namespace?))
-    (println (str "Namespace: " namespace))
-    (println (str "File: " file))
-    (println (str "Excluded Properties: " excluded-properties))
-    (println (str "Properties: " properties))
-    (println (str "Tags: " tags))
-    (println (str "Categories: " categories))
-    (println (str "Created at: " created-at))
-    (println (str "Updated at: " updated-at))
-    (str property-data)))
+        page-data (s/join ""
+                          ["---\n"
+                           (str "title: " title "\n")
+                           (when namespace? (str "namespace: " namespace "\n"))
+                           (str "tags: " (parse-property-value-list tags) "\n")
+                           (str "categories: " (parse-property-value-list categories) "\n")
+                           (str "date: " created-at "\n")
+                           (str "lastMod: " updated-at "\n")
+                           "---\n"])]
+    (when verbose-mode?
+      (println "======================================")
+      (println (str "Title: " title))
+      (println (str "Namespace?: " namespace?))
+      (println (str "Namespace: " namespace))
+      (println (str "File: " file))
+      (println (str "Excluded Properties: " excluded-properties))
+      (println (str "Properties: " properties))
+      (println (str "Tags: " tags))
+      (println (str "Categories: " categories))
+      (println (str "Created at: " created-at))
+      (println (str "Updated at: " updated-at)))
+    {:filename file
+     :has-namespace namespace?
+     :namespace namespace
+     :data page-data}))
 
-(defn- parse-page
+(defn- parse-page-content
   [graph-db, page]
   (let [query '[:find (pull ?b [*])
                 :in $ ?page-id
                 :where
                 [?b :block/left ?page-id]]
-        first-block (d/q query graph-db (get page :db/id))]
-    ;; (println first-block)
-    ))
+        first-block (d/q query graph-db (get page :db/id))]))
 
 (defn- parse-page-blocks
   [graph-db, page]
-  (str
-   (parse-meta-data graph-db page)
-   (parse-page graph-db page)))
+  (let [meta-data (parse-meta-data page)
+        content-data (parse-page-content graph-db page)
+        page-data (str
+                   (get meta-data :data)
+                   content-data)]
+    {:filename (get meta-data :filename)
+     :has-namespace (get meta-data :has-namespace)
+     :namespace (get meta-data :namespace)
+     :data page-data}))
 
 (defn- get-all-public-pages
   [graph-db]
@@ -187,12 +214,13 @@
           graph-db (or (get-graph-db graph-name)
                        (throw (ex-info "No graph found" {:graph graph-name})))]
       (println (str "Graph " graph-name " loaded successfully."))
+      (setup-outdir)
       (let [public-pages (map #(get % 0) (get-all-public-pages graph-db))]
         (dorun
          (for [public-page public-pages]
            (let [page-data (parse-page-blocks graph-db public-page)]
              (store-page page-data)
-             (println "Page Data: \n" page-data))))))))
+             (println "Page Data: \n" (get page-data :data)))))))))
 
 (when (= nbb/*file* (:file (meta #'-main)))
   (-main *command-line-args*))

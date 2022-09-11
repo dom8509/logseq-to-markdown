@@ -1,2 +1,4 @@
 {:excluded-properties #{:filters :public}
- :trim-namespaces true}
+ :trim-namespaces true
+ :verbose false
+ :output-dir "./out"}
