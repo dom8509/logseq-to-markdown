@@ -1,2 +1,2 @@
-# logseq-export
-Export Logseq to Markdown
+# logseq-exporter
+Export Logseq Graph to (Hugo) Markdown
