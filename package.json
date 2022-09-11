@@ -1,0 +1,29 @@
+{
+  "name": "@dom8509/logseq-exporter",
+  "version": "0.0.1",
+  "description": "Export Logseq Graph to (Hugo) Markdown",
+  "dependencies": {
+    "@dom8509/nbb-logseq": "0.7.134"
+    
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dom8509/logseq-exporter"
+  },
+  "keywords": [
+    "logseq",
+    "knowledge graph",
+    "clojurescript",
+    "datalog",
+    "datascript",
+    "nbb",
+    "hugo",
+    "markdown",
+    "exporter"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "logseq-export": "nbb-logseq --debug src/logseq-export.cljs",
+    "clean": "rm -fR node_modules;"
+  }
+}
