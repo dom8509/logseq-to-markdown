@@ -1,1 +1,2 @@
-{:excluded-properties #{:filters :public}}
+{:excluded-properties #{:filters :public}
+ :trim-namespaces true}

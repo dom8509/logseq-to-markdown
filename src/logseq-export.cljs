@@ -7,6 +7,7 @@
             ["path" :as path]
             ["os" :as os]
             [clojure.edn :as edn]
+            [clojure.string :as s]
             [datascript.transit :as dt]
             [datascript.core :as d]
             [nbb.core :as nbb]
@@ -39,12 +40,10 @@
 ;; config file
 (def config-file "./config.edn")
 
-(defn config-file-value
-  [key]
-  (let [file-content (when (exists? config-file)
-                       (println (str "Loading config file " config-file " ..."))
-                       (edn/read-string (.readFileSync fs config-file "utf8")))]
-    (get file-content key)))
+(def exporter-config
+  (when (exists? config-file)
+    (println (str "Loading config file " config-file " ..."))
+    (edn/read-string (.readFileSync fs config-file "utf8"))))
 
 ;; graph utils
 (defn get-graph-paths
@@ -90,10 +89,21 @@
   ;; (println page-blocks)
   )
 
+(defn- convert-filename
+  [filename]
+  (let [replace-pattern #"([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])"]
+    (s/replace filename replace-pattern "")))
+
 (defn- parse-meta-data
   [graph-db, page]
-  (let [title (get page :block/original-name)
-        excluded-properties (config-file-value :excluded-properties)
+  (let [data (str "")
+        original-name (get page :block/original-name)
+        namespace? (and (true? (get exporter-config :trim-namespaces)) (s/includes? original-name "/"))
+        title (or (and namespace? (last (s/split original-name "/"))) original-name)
+        namespace (when namespace? (let [tokens (s/split original-name "/")]
+                                    (s/join "/" (subvec tokens 0 (- (count tokens) 1)))))
+        file (convert-filename title)
+        excluded-properties (get exporter-config :excluded-properties)
         properties (into {} (filter #(not (contains? excluded-properties (first %))) (get page :block/properties)))
         tags (get properties :tags)
         categories (get properties :categories)
@@ -101,14 +111,21 @@
         updated-at (hugo-date (get page :block/updated-at))]
     (println "======================================")
     (println (str "Title: " title))
+    (println (str "Namespace?: " namespace?))
+    (println (str "Namespace: " namespace))
+    (println (str "File: " file))
+    (println (str "Excluded Properties: " excluded-properties))
     (println (str "Properties: " properties))
     (println (str "Tags: " tags))
     (println (str "Categories: " categories))
-    (println (str "Excluded Properties: " excluded-properties))
-    (println (str "Created at: "created-at))
+    (println (str "Created at: " created-at))
     (println (str "Updated at: " updated-at))
     (println)
-    
+
+    (->
+     (str "---")
+     (str "\n---"))
+
     ;; Convert to yml
       ;; let ret = `---`;
   ;; for (let [prop, value] of Object.entries(propList)) {
@@ -162,7 +179,8 @@
         (dorun
          (for [public-page public-pages]
            (let [page-data (parse-page-blocks graph-db public-page)]
-             (store-page page-data))))))))
+             (store-page page-data)
+             (println "Page Data: \n" page-data))))))))
 
 (when (= nbb/*file* (:file (meta #'-main)))
   (-main *command-line-args*))
