@@ -94,21 +94,51 @@
   (let [replace-pattern #"([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])"]
     (s/replace filename replace-pattern "")))
 
+(defn- parse-property-value
+  [property-value]
+  (let [string-value? (string? property-value)
+        object-value? (try
+                        (and (not string-value?) (> (count property-value) 0))
+                        (catch :default _ false))
+        iteratable-value? (and object-value? (> (count property-value) 1))
+        value-lines (or
+                     (and
+                      iteratable-value?
+                      (let [property-lines (map #(str "- " %) property-value)
+                            property-data (s/join "\n" property-lines)]
+                        (str "\n" property-data)))
+                     (or
+                      (and
+                       string-value?
+                       (str property-value))
+                      (and
+                       object-value?
+                       (first property-value))
+                      (str property-value)))]
+    (str value-lines)))
+
+(defn- parse-property
+  [property]
+  (str (s/replace (str (key property)) ":" "") ": " (parse-property-value (val property))))
+
 (defn- parse-meta-data
   [graph-db, page]
-  (let [data (str "")
-        original-name (get page :block/original-name)
+  (let [original-name (get page :block/original-name)
         namespace? (and (true? (get exporter-config :trim-namespaces)) (s/includes? original-name "/"))
         title (or (and namespace? (last (s/split original-name "/"))) original-name)
         namespace (when namespace? (let [tokens (s/split original-name "/")]
-                                    (s/join "/" (subvec tokens 0 (- (count tokens) 1)))))
+                                     (s/join "/" (subvec tokens 0 (- (count tokens) 1)))))
         file (convert-filename title)
         excluded-properties (get exporter-config :excluded-properties)
         properties (into {} (filter #(not (contains? excluded-properties (first %))) (get page :block/properties)))
+        properties? (> (count properties) 0)
         tags (get properties :tags)
         categories (get properties :categories)
         created-at (hugo-date (get page :block/created-at))
-        updated-at (hugo-date (get page :block/updated-at))]
+        updated-at (hugo-date (get page :block/updated-at))
+        property-data-lines (into [] (map #(parse-property %) properties))
+        property-data-delimiter (str "---")
+        property-data (and properties? (s/join "\n" (cons property-data-delimiter (conj property-data-lines, property-data-delimiter))))]
     (println "======================================")
     (println (str "Title: " title))
     (println (str "Namespace?: " namespace?))
@@ -120,25 +150,7 @@
     (println (str "Categories: " categories))
     (println (str "Created at: " created-at))
     (println (str "Updated at: " updated-at))
-    (println)
-
-    (->
-     (str "---")
-     (str "\n---"))
-
-    ;; Convert to yml
-      ;; let ret = `---`;
-  ;; for (let [prop, value] of Object.entries(propList)) {
-  ;;   if (Array.isArray(value)) {
-  ;;     ret += `\n${prop}:`;
-  ;;     value.forEach((element) => (ret += `\n- ${element}`));
-  ;;   } else {
-  ;;     ret += `\n${prop}: ${value}`;
-  ;;   }
-  ;; }
-  ;; ret += "\n---";
-  ;; return ret;
-    ))
+    (str property-data)))
 
 (defn- parse-page
   [graph-db, page]
