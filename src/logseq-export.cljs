@@ -6,6 +6,7 @@
   (:require ["fs" :as fs]
             ["path" :as path]
             ["os" :as os]
+            [clojure.edn :as edn]
             [datascript.transit :as dt]
             [datascript.core :as d]
             [nbb.core :as nbb]
@@ -24,6 +25,7 @@
 
 (defn slurp
   [file]
+  (println (str "Loading file " file))
   (fs/readFileSync file))
 
 (defn exists?
@@ -33,6 +35,16 @@
 (defn directory?
   [file]
   (.isDirectory (fs/lstatSync file)))
+
+;; config file
+(def config-file "./config.edn")
+
+(defn config-file-value
+  [key]
+  (let [file-content (when (exists? config-file)
+                       (println (str "Loading config file " config-file " ..."))
+                       (edn/read-string (.readFileSync fs config-file "utf8")))]
+    (get file-content key)))
 
 ;; graph utils
 (defn get-graph-paths
@@ -71,30 +83,34 @@
         year (t/year date)
         month (format-date (t/month date))
         day (format-date (t/day date))]
-    (str year "-" month "-" day))
-  )
+    (str year "-" month "-" day)))
 
 (defn- store-page
   [page-blocks]
-  (println page-blocks))
+  ;; (println page-blocks)
+  )
 
 (defn- parse-meta-data
   [graph-db, page]
   (let [title (get page :block/original-name)
-        excluded-properties {:public :filters}
-        ;; properties (reduce #(contains ) {} (get page :block/properties))
-        properties (get page :block/properties)
+        excluded-properties (config-file-value :excluded-properties)
+        properties (into {} (filter #(not (contains? excluded-properties (first %))) (get page :block/properties)))
         tags (get properties :tags)
         categories (get properties :categories)
         created-at (hugo-date (get page :block/created-at))
         updated-at (hugo-date (get page :block/updated-at))]
-    (println title)
-    (println properties)
-    (println excluded-properties)
-    (println created-at)
-    ;; Todo: Delete public & filters properties
+    (println "======================================")
+    (println (str "Title: " title))
+    (println (str "Properties: " properties))
+    (println (str "Tags: " tags))
+    (println (str "Categories: " categories))
+    (println (str "Excluded Properties: " excluded-properties))
+    (println (str "Created at: "created-at))
+    (println (str "Updated at: " updated-at))
+    (println)
+    
     ;; Convert to yml
-  ;;     let ret = `---`;
+      ;; let ret = `---`;
   ;; for (let [prop, value] of Object.entries(propList)) {
   ;;   if (Array.isArray(value)) {
   ;;     ret += `\n${prop}:`;
