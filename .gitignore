@@ -1,9 +1,4 @@
 node_modules/
-.nbb/
-.shadow-cljs/
-.clj-kondo/
-lib/
+out/
 *.log
-*.jar
 .DS_Store
-report.html
