@@ -98,10 +98,10 @@
 (defn- store-page
   [page-data]
   (let [output-dir-base (get exporter-config :output-dir)
-        has-namespace? ( get page-data :has-namespace)
+        has-namespace? (get page-data :has-namespace)
         output-dir (if has-namespace?
-                         (str output-dir-base "/pages/" (get page-data :namespace))
-                         (str output-dir-base "/pages"))
+                     (str output-dir-base "/pages/" (get page-data :namespace))
+                     (str output-dir-base "/pages"))
         full-file-name (str output-dir "/" (get page-data :filename))]
     (when has-namespace?
       (fs/mkdirSync output-dir #js {:recursive true}))
@@ -177,11 +177,7 @@
 
 (defn- parse-page-content
   [graph-db, page]
-  (let [query '[:find (pull ?b [*])
-                :in $ ?page-id
-                :where
-                [?b :block/left ?page-id]]
-        first-block (d/q query graph-db (get page :db/id))]))
+  ())
 
 (defn- parse-page-blocks
   [graph-db, page]
@@ -205,6 +201,40 @@
                 [?p :block/name ?n]]]
     (d/q query graph-db)))
 
+(declare get-block-tree)
+
+(defn- get-child-blocks
+  [graph-db parent-block-id level]
+  (let [query '[:find (pull ?b [*])
+                :in $ ?parent-block-id
+                :where
+                [?b :block/left ?parent-block-id]
+                [?b :block/parent ?parent-block-id]]
+        query-res (d/q query graph-db parent-block-id)]
+    (when (> (count query-res) 0)
+      (let [data (nth (map #(get % 0) query-res) 0)
+            current-block-id (get data :db/id)]
+        (cons {:level level
+               :data data
+               :children (get-child-blocks graph-db current-block-id (+ level 1))}
+              (get-block-tree graph-db parent-block-id current-block-id level))))))
+
+(defn- get-block-tree
+  [graph-db parent-block-id prev-block-id level]
+  (let [query '[:find (pull ?b [*])
+                :in $ ?prev-block-id ?parent-block-id
+                :where
+                [?b :block/left ?prev-block-id]
+                [?b :block/parent ?parent-block-id]]
+        query-res (d/q query graph-db prev-block-id parent-block-id)]
+    (when (> (count query-res) 0)
+      (let [data (nth (map #(get % 0) query-res) 0)
+            current-block-id (get data :db/id)]
+        (cons {:level level
+               :data data
+               :children (get-child-blocks graph-db current-block-id (+ level 1))}
+              (get-block-tree graph-db parent-block-id current-block-id level))))))
+
 (defn -main
   [args]
   (if-not (= 1 (count args))
@@ -214,13 +244,21 @@
           graph-db (or (get-graph-db graph-name)
                        (throw (ex-info "No graph found" {:graph graph-name})))]
       (println (str "Graph " graph-name " loaded successfully."))
-      (setup-outdir)
-      (let [public-pages (map #(get % 0) (get-all-public-pages graph-db))]
-        (dorun
-         (for [public-page public-pages]
-           (let [page-data (parse-page-blocks graph-db public-page)]
-             (store-page page-data)
-             (println "Page Data: \n" (get page-data :data)))))))))
+      (println)
+      ;; (let [public-pages (map #(get % 0) (get-all-public-pages graph-db))]
+      ;;   (dorun
+      ;;    (for [public-page public-pages]
+      ;;      (let [page-data (parse-page-blocks graph-db public-page)]
+      ;;        (store-page page-data)
+      ;;        (println (get-page-tree graph-db public-page))))))
+      (let [public-page (nth (map #(get % 0) (get-all-public-pages graph-db)) 0)
+            first-block-id (get public-page :db/id)
+            page-tree (get-block-tree graph-db first-block-id first-block-id 1)]
+        (println)
+        (println "Page Tree:")
+        (println (count page-tree))
+        (println page-tree)
+        (println)))))
 
 (when (= nbb/*file* (:file (meta #'-main)))
   (-main *command-line-args*))
