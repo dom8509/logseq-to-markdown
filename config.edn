@@ -1,4 +1,5 @@
 {:excluded-properties #{:filters :public}
  :trim-namespaces true
+ :keep-bullets true
  :verbose false
  :output-dir "./out"}

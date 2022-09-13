@@ -175,16 +175,24 @@
      :namespace namespace
      :data page-data}))
 
+;; Parse the text of the :block/content and convert it into markdown
+(defn- parse-text
+  [block]
+  (let [current-block-data (get block :data)]
+    (when (not (and (get current-block-data :block/pre-block?) (= (get block :level) 1)))
+      (let [prefix (if (and (get exporter-config :keep-bullets) (not-empty (get current-block-data :block/content)))
+                     (str (apply str (concat (repeat (* (- (get block :level) 1) 1) " "))) "+ ")
+                     (str ""))]
+        (str prefix (get current-block-data :block/content) "\n")))))
+
+;; Iterate over every block and parse the :block/content
 (defn- parse-block-content
   [block-tree]
-  (dorun
-   (for [i (range (count block-tree))]
-     (when (not (and (= i 0) (= (get (nth block-tree i) :level) 1)))
-       (let [current-block (nth block-tree i)
-             current-block-data (get current-block :data)]
-         (println (get current-block-data :block/content))
-         (when-let [current-block-children (get current-block :children)]
-           (parse-block-content current-block-children)))))))
+  (when (not-empty block-tree)
+    (let [current-block (first block-tree)]
+      (str (parse-text current-block)
+           (parse-block-content (get current-block :children))
+           (parse-block-content (rest block-tree))))))
 
 (declare get-block-tree)
 
@@ -259,15 +267,6 @@
          (for [public-page public-pages]
            (let [page-data (parse-page-blocks graph-db public-page)]
              (store-page page-data))))))))
-
-      ;; (let [public-page (nth (map #(get % 0) (get-all-public-pages graph-db)) 0)
-      ;;       first-block-id (get public-page :db/id)
-      ;;       page-tree (get-block-tree graph-db first-block-id first-block-id 1)]
-      ;;   (println)
-      ;;   (println "Page Tree:")
-      ;;   (println (count page-tree))
-      ;;   (println page-tree)
-      ;;   (println)))))
 
 (when (= nbb/*file* (:file (meta #'-main)))
   (-main *command-line-args*))
