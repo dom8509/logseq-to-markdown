@@ -175,31 +175,16 @@
      :namespace namespace
      :data page-data}))
 
-(defn- parse-page-content
-  [graph-db, page]
-  ())
-
-(defn- parse-page-blocks
-  [graph-db, page]
-  (let [meta-data (parse-meta-data page)
-        content-data (parse-page-content graph-db page)
-        page-data (str
-                   (get meta-data :data)
-                   content-data)]
-    {:filename (get meta-data :filename)
-     :has-namespace (get meta-data :has-namespace)
-     :namespace (get meta-data :namespace)
-     :data page-data}))
-
-(defn- get-all-public-pages
-  [graph-db]
-  (let [query '[:find (pull ?p [*])
-                :where
-                [?p :block/properties ?pr]
-                [(get ?pr :public) ?t]
-                [(= true ?t)]
-                [?p :block/name ?n]]]
-    (d/q query graph-db)))
+(defn- parse-block-content
+  [block-tree]
+  (dorun
+   (for [i (range (count block-tree))]
+     (when (not (and (= i 0) (= (get (nth block-tree i) :level) 1)))
+       (let [current-block (nth block-tree i)
+             current-block-data (get current-block :data)]
+         (println (get current-block-data :block/content))
+         (when-let [current-block-children (get current-block :children)]
+           (parse-block-content current-block-children)))))))
 
 (declare get-block-tree)
 
@@ -235,6 +220,30 @@
                :children (get-child-blocks graph-db current-block-id (+ level 1))}
               (get-block-tree graph-db parent-block-id current-block-id level))))))
 
+(defn- parse-page-blocks
+  [graph-db page]
+  (let [meta-data (parse-meta-data page)
+        first-block-id (get page :db/id)
+        block-tree (get-block-tree graph-db first-block-id first-block-id 1)
+        content-data (parse-block-content block-tree)
+        page-data (str
+                   (get meta-data :data)
+                   content-data)]
+    {:filename (get meta-data :filename)
+     :has-namespace (get meta-data :has-namespace)
+     :namespace (get meta-data :namespace)
+     :data page-data}))
+
+(defn- get-all-public-pages
+  [graph-db]
+  (let [query '[:find (pull ?p [*])
+                :where
+                [?p :block/properties ?pr]
+                [(get ?pr :public) ?t]
+                [(= true ?t)]
+                [?p :block/name ?n]]]
+    (d/q query graph-db)))
+
 (defn -main
   [args]
   (if-not (= 1 (count args))
@@ -245,20 +254,20 @@
                        (throw (ex-info "No graph found" {:graph graph-name})))]
       (println (str "Graph " graph-name " loaded successfully."))
       (println)
-      ;; (let [public-pages (map #(get % 0) (get-all-public-pages graph-db))]
-      ;;   (dorun
-      ;;    (for [public-page public-pages]
-      ;;      (let [page-data (parse-page-blocks graph-db public-page)]
-      ;;        (store-page page-data)
-      ;;        (println (get-page-tree graph-db public-page))))))
-      (let [public-page (nth (map #(get % 0) (get-all-public-pages graph-db)) 0)
-            first-block-id (get public-page :db/id)
-            page-tree (get-block-tree graph-db first-block-id first-block-id 1)]
-        (println)
-        (println "Page Tree:")
-        (println (count page-tree))
-        (println page-tree)
-        (println)))))
+      (let [public-pages (map #(get % 0) (get-all-public-pages graph-db))]
+        (dorun
+         (for [public-page public-pages]
+           (let [page-data (parse-page-blocks graph-db public-page)]
+             (store-page page-data))))))))
+
+      ;; (let [public-page (nth (map #(get % 0) (get-all-public-pages graph-db)) 0)
+      ;;       first-block-id (get public-page :db/id)
+      ;;       page-tree (get-block-tree graph-db first-block-id first-block-id 1)]
+      ;;   (println)
+      ;;   (println "Page Tree:")
+      ;;   (println (count page-tree))
+      ;;   (println page-tree)
+      ;;   (println)))))
 
 (when (= nbb/*file* (:file (meta #'-main)))
   (-main *command-line-args*))
