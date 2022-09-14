@@ -41,6 +41,7 @@
 (def config-file "./config.edn")
 
 (def exporter-config
+  ;; TODO load file only once
   (when (exists? config-file)
     (edn/read-string (slurp config-file))))
 
@@ -90,21 +91,18 @@
   []
   (let [output-dir (get exporter-config :output-dir)
         subfolders ["pages" "assets"]]
-    (when (not (exists? output-dir))
-      (fs/mkdirSync output-dir)
-      (dorun
-       (map #(fs/mkdirSync (str output-dir "/" %)) subfolders)))))
+    (when (exists? output-dir)
+      (fs/rmSync output-dir #js {:recursive true}))
+    (fs/mkdirSync output-dir)
+    (dorun
+     (map #(fs/mkdirSync (str output-dir "/" %)) subfolders))))
 
 (defn- store-page
   [page-data]
   (let [output-dir-base (get exporter-config :output-dir)
-        has-namespace? (get page-data :has-namespace)
-        output-dir (if has-namespace?
-                     (str output-dir-base "/pages/" (get page-data :namespace))
-                     (str output-dir-base "/pages"))
+        output-dir (str output-dir-base "/pages/" (get page-data :namespace))
         full-file-name (str output-dir "/" (get page-data :filename))]
-    (when has-namespace?
-      (fs/mkdirSync output-dir #js {:recursive true}))
+    (fs/mkdirSync output-dir #js {:recursive true})
     (fs/writeFileSync full-file-name (get page-data :data))))
 
 (defn- convert-filename
@@ -138,11 +136,12 @@
 (defn- parse-meta-data
   [page]
   (let [original-name (get page :block/original-name)
-        namespace? (and (true? (get exporter-config :trim-namespaces)) (s/includes? original-name "/"))
-        namespace (when namespace? (let [tokens (s/split original-name "/")]
-                                     (s/join "/" (subvec tokens 0 (- (count tokens) 1)))))
-        title (or (and namespace? (last (s/split original-name "/"))) original-name)
-        file (str (convert-filename title) ".md")
+        trim-namespaces? (get exporter-config :trim-namespaces)
+        namespace? (s/includes? original-name "/")
+        namespace (let [tokens (s/split original-name "/")]
+                                     (s/join "/" (subvec tokens 0 (- (count tokens) 1))))
+        title (or (and trim-namespaces? namespace? (last (s/split original-name "/"))) original-name)
+        file (str (convert-filename (or (and namespace? (last (s/split original-name "/"))) original-name)) ".md")
         excluded-properties (get exporter-config :excluded-properties)
         properties (into {} (filter #(not (contains? excluded-properties (first %))) (get page :block/properties)))
         tags (get properties :tags)
@@ -171,7 +170,6 @@
       (println (str "Created at: " created-at))
       (println (str "Updated at: " updated-at)))
     {:filename file
-     :has-namespace namespace?
      :namespace namespace
      :data page-data}))
 
@@ -238,7 +236,6 @@
                    (get meta-data :data)
                    content-data)]
     {:filename (get meta-data :filename)
-     :has-namespace (get meta-data :has-namespace)
      :namespace (get meta-data :namespace)
      :data page-data}))
 
@@ -261,7 +258,7 @@
           graph-db (or (get-graph-db graph-name)
                        (throw (ex-info "No graph found" {:graph graph-name})))]
       (println (str "Graph " graph-name " loaded successfully."))
-      (println)
+      (setup-outdir)
       (let [public-pages (map #(get % 0) (get-all-public-pages graph-db))]
         (dorun
          (for [public-page public-pages]
