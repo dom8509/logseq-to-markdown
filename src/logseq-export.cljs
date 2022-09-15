@@ -163,10 +163,10 @@
                      (or
                       (and
                        string-value?
-                       (str property-value))
+                       (str "\n- " property-value))
                       (and
                        object-value?
-                       (first property-value))
+                       (str "\n- " (first property-value)))
                       (str property-value)))]
     (str value-lines)))
 
@@ -225,7 +225,6 @@
                     [(= ?block-ref-id ?t)]
                     [?p :block/content ?c]]
             query-res (d/q query (get-graph-db) block-ref-id)]
-        (println "Found block ref " block-ref-id)
         (if (> (count query-res) 0)
           (let [data (nth (map #(get % 0) query-res) 0)
                 id-pattern (re-pattern (str "id:: " block-ref-id))]
@@ -250,7 +249,11 @@
 ;; TODO implement parse-diagram-as-code
 (defn- parse-diagram-as-code
   [text]
-  (str text))
+  (let [pattern #"{{render code_diagram,(.*?)}}\n"
+        res (re-find pattern text)]
+    (if (empty? res)
+      (str text)
+      (print "last" res))))
 
 (defn- parse-excalidraw-diagram
   [text]
