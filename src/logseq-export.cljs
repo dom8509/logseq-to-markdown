@@ -252,10 +252,18 @@
   [text]
   (str text))
 
-;; TODO implement parse-excalidraw-diagram
 (defn- parse-excalidraw-diagram
   [text]
-  (str text))
+  (let [pattern #"\[\[draws/(.*?)\]\]"
+        res (re-find pattern text)]
+    (if (empty? res)
+      (str text)
+      (let [diagram-name (first (s/split (last res) "."))
+            diagram-file (str @logseq-data-path "/draws/" (last res))
+            diagram-content (slurp diagram-file)]
+        (str "{{<diagram name=\"" diagram-name "\" type=\"excalidraw\">}}\n"
+             diagram-content "\n"
+             "{{</diagram>}}")))))
 
 ;; TODO implement parse-links
 (defn- parse-links
@@ -274,7 +282,7 @@
 
 (defn- parse-video
   [text]
-  (let [pattern #"{{video (.*?)}}"]
+  (let [pattern #"{{(?:video|youtube|vimeo) (.*?)}}"]
     (s/replace text pattern "{{< video $1 >}}")))
 
 ;; TODO parse-markers
@@ -291,16 +299,19 @@
 ;; FIXME multiple line replace not working
 (defn- parse-org-cmd
   [text]
-  (let [pattern #"(?s)#\+BEGIN_([A-Z]*)[^\n]*\n(.*)#\+END_[^\n]*"
+  (let [pattern #"(?sm)#\+BEGIN_([A-Z]*)[^\n]*\n(.*)#\+END_[^\n]*"
         res (re-find pattern text)]
-    (when (= (count res) 3)
-      (println (str "str: " (nth res 2))))
-    (s/replace text #"(?s)#\+BEGIN_([A-Z]*)[^\n]*\n(.*)#\+END_[^\n]*" "{{< logseq/org$1 >}}$2{{< / logseq/org$1 >}}")))
+    (when (not-empty res)
+      (println (str "parse-org-cmd res" res)))
+    (s/replace text pattern "{{< logseq/org$1 >}}$2{{< / logseq/org$1 >}}")))
 
 ;; FIXME multiple line replace not working
 (defn- rm-meta-data
   [text]
-  (let [pattern #"(?s):LOGBOOK:.*:END:"]
+  (let [pattern #"(?s)(:LOGBOOK:.*:END:)"
+        res (re-find pattern text)]
+    (when (not-empty res)
+      (println (str "parse-org-cmd res" res)))
     (s/replace text pattern "")))
 
 (defn- rm-ref-ids
