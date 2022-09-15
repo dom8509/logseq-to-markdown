@@ -69,20 +69,28 @@
 (defn determine-logset-data-path
   ;; if data path is unknown get path 
   ;; from current block and store as atom
-  [graph-db block]
-  (when (empty? @logseq-data-path)
-    (let [query '[:find ?n
+  [graph-db public-pages]
+  (when (and (empty? @logseq-data-path) (not-empty public-pages))
+    (let [block (first public-pages)
+          block-id (get block :db/id)
+          query '[:find ?n
                   :in $ ?block-id
                   :where
                   [?block-id :block/file ?f]
                   [?f :file/path ?n]]
-          query-res (d/q query graph-db (get block :db/id))
+          query-res (d/q query graph-db block-id)
           logseq-filename (first (map #(get % 0) query-res))
           logseq-filename-tokens (s/split logseq-filename "/")
-          logseq-file-path (s/join "/" (subvec logseq-filename-tokens 0 (- (count logseq-filename-tokens) 1)))]
+          logseq-file-path (s/join "/" (subvec logseq-filename-tokens 0 (- (count logseq-filename-tokens) 2)))]
       (reset! logseq-data-path logseq-file-path))))
 
 (def get-logseq-data-path @logseq-data-path)
+
+(defn- copy-asset
+  [link]
+  (let [src-path (str @logseq-data-path link)
+        dst-path (str (get exporter-config :output-dir) link)]
+    (fs/copyFileSync src-path dst-path)))
 
 (defn get-graph-path
   [graph]
@@ -199,10 +207,19 @@
 
 (defn- parse-image
   [text]
-  (let [image-pattern #"!\[.*?\]\((.*?)\)"]
-    (if-let [image-text (re-find image-pattern text)]
-      (str "Image found\n")
-      (str "No Image found\n"))))
+  (let [image-pattern #"!\[.*?\]\((.*?)\)"
+        image-text (re-find image-pattern text)]
+    (if (empty? image-text)
+      (str text)
+      (let [link (nth image-text 1)
+            converted-link (s/replace link #"\.\.\/" "/")
+            converted-text (s/replace text #"\.\.\/" "/")]
+        (println (str "Link:  " link))
+        (if (not (or (s/includes? link "http") (s/includes? link "pdf")))
+          (do
+            (copy-asset converted-link)
+            (str converted-text))
+          (str text))))))
 
 ;; Parse the text of the :block/content and convert it into markdown
 (defn- parse-text
@@ -214,7 +231,7 @@
                      (str ""))
             block-content (get current-block-data :block/content)]
         (->> (str block-content "\n")
-             parse-image
+             (parse-image)
              (str prefix))))))
 
 ;; Iterate over every block and parse the :block/content
