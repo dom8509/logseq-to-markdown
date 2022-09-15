@@ -40,10 +40,14 @@
 ;; config file
 (def config-file "./config.edn")
 
+(def exporter-config-data (atom {}))
+
 (def exporter-config
-  ;; TODO load file only once
-  (when (exists? config-file)
-    (edn/read-string (slurp config-file))))
+  (when (empty? @exporter-config-data)
+    (if (exists? config-file)
+      (let [data (edn/read-string (slurp config-file))]
+        (reset! exporter-config-data data))
+      (println (str "Config file " config-file " not found.")))))
 
 (def verbose-mode?
   (get exporter-config :verbose))
@@ -59,6 +63,26 @@
 (defn full-path->graph
   [path]
   (second (re-find #"\+\+([^\+]+).transit$" path)))
+
+(def logseq-data-path (atom {}))
+
+(defn determine-logset-data-path
+  ;; if data path is unknown get path 
+  ;; from current block and store as atom
+  [graph-db block]
+  (when (empty? @logseq-data-path)
+    (let [query '[:find ?n
+                  :in $ ?block-id
+                  :where
+                  [?block-id :block/file ?f]
+                  [?f :file/path ?n]]
+          query-res (d/q query graph-db (get block :db/id))
+          logseq-filename (first (map #(get % 0) query-res))
+          logseq-filename-tokens (s/split logseq-filename "/")
+          logseq-file-path (s/join "/" (subvec logseq-filename-tokens 0 (- (count logseq-filename-tokens) 1)))]
+      (reset! logseq-data-path logseq-file-path))))
+
+(def get-logseq-data-path @logseq-data-path)
 
 (defn get-graph-path
   [graph]
@@ -139,7 +163,7 @@
         trim-namespaces? (get exporter-config :trim-namespaces)
         namespace? (s/includes? original-name "/")
         namespace (let [tokens (s/split original-name "/")]
-                                     (s/join "/" (subvec tokens 0 (- (count tokens) 1))))
+                    (s/join "/" (subvec tokens 0 (- (count tokens) 1))))
         title (or (and trim-namespaces? namespace? (last (s/split original-name "/"))) original-name)
         file (str (convert-filename (or (and namespace? (last (s/split original-name "/"))) original-name)) ".md")
         excluded-properties (get exporter-config :excluded-properties)
@@ -173,6 +197,13 @@
      :namespace namespace
      :data page-data}))
 
+(defn- parse-image
+  [text]
+  (let [image-pattern #"!\[.*?\]\((.*?)\)"]
+    (if-let [image-text (re-find image-pattern text)]
+      (str "Image found\n")
+      (str "No Image found\n"))))
+
 ;; Parse the text of the :block/content and convert it into markdown
 (defn- parse-text
   [block]
@@ -180,8 +211,11 @@
     (when (not (and (get current-block-data :block/pre-block?) (= (get block :level) 1)))
       (let [prefix (if (and (get exporter-config :keep-bullets) (not-empty (get current-block-data :block/content)))
                      (str (apply str (concat (repeat (* (- (get block :level) 1) 1) " "))) "+ ")
-                     (str ""))]
-        (str prefix (get current-block-data :block/content) "\n")))))
+                     (str ""))
+            block-content (get current-block-data :block/content)]
+        (->> (str block-content "\n")
+             parse-image
+             (str prefix))))))
 
 ;; Iterate over every block and parse the :block/content
 (defn- parse-block-content
@@ -260,6 +294,7 @@
       (println (str "Graph " graph-name " loaded successfully."))
       (setup-outdir)
       (let [public-pages (map #(get % 0) (get-all-public-pages graph-db))]
+        (determine-logset-data-path graph-db public-pages)
         (dorun
          (for [public-page public-pages]
            (let [page-data (parse-page-blocks graph-db public-page)]
