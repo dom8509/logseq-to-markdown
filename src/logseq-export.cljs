@@ -97,13 +97,18 @@
   (some #(when (= graph (full-path->graph %)) %)
         (get-graph-paths)))
 
+(def graph-db (atom {:loaded false}))
+
 (defn- get-graph-db
   [graph]
-  (when-let [file (or (get-graph-path graph)
+  (when (not (get @graph-db :loaded))
+    (when-let [file (or (get-graph-path graph)
                       ;; graph is a path
-                      graph)]
-    (when (exists? file)
-      (-> file slurp dt/read-transit-str))))
+                        graph)]
+      (when (exists? file)
+        (println "Loading graph.")
+        (reset! graph-db {:loaded true :db (-> file slurp dt/read-transit-str)}))))
+  (get @graph-db :db))
 
 (defn- format-date
   [date]
@@ -205,21 +210,108 @@
      :namespace namespace
      :data page-data}))
 
+(defn- parse-block-refs
+  [text]
+  (let [pattern #"\(\(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)\)"
+        block-ref-text (re-find pattern text)]
+    (if (empty? block-ref-text)
+      (str text)
+      (let [block-ref-id (last block-ref-text)
+            query '[:find ?c
+                    :in $ ?block-ref-id
+                    :where
+                    [?p :block/properties ?pr]
+                    [(get ?pr :id) ?t]
+                    [(= ?block-ref-id ?t)]
+                    [?p :block/content ?c]]
+            query-res (d/q query (get-graph-db) block-ref-id)]
+        (println "Found block ref " block-ref-id)
+        (if (> (count query-res) 0)
+          (let [data (nth (map #(get % 0) query-res) 0)
+                id-pattern (re-pattern (str "id:: " block-ref-id))]
+            (s/replace data id-pattern ""))
+          (str text))))))
+
 (defn- parse-image
   [text]
-  (let [image-pattern #"!\[.*?\]\((.*?)\)"
-        image-text (re-find image-pattern text)]
+  (let [pattern #"!\[.*?\]\((.*?)\)"
+        image-text (re-find pattern text)]
     (if (empty? image-text)
       (str text)
       (let [link (nth image-text 1)
             converted-link (s/replace link #"\.\.\/" "/")
             converted-text (s/replace text #"\.\.\/" "/")]
-        (println (str "Link:  " link))
         (if (not (or (s/includes? link "http") (s/includes? link "pdf")))
           (do
             (copy-asset converted-link)
             (str converted-text))
           (str text))))))
+
+;; TODO implement parse-diagram-as-code
+(defn- parse-diagram-as-code
+  [text]
+  (str text))
+
+;; TODO implement parse-excalidraw-diagram
+(defn- parse-excalidraw-diagram
+  [text]
+  (str text))
+
+;; TODO implement parse-links
+(defn- parse-links
+  [text]
+  (str text))
+
+;; TODO parse-namespaces
+(defn- parse-namespaces
+  [text]
+  (str text))
+
+;; TODO parse-embeds
+(defn- parse-embeds
+  [text]
+  (str text))
+
+(defn- parse-video
+  [text]
+  (let [pattern #"{{video (.*?)}}"]
+    (s/replace text pattern "{{< video $1 >}}")))
+
+;; TODO parse-markers
+(defn- parse-markers
+  [text]
+  (str text))
+
+(defn- parse-highlights
+  [text]
+  (let [pattern #"(==(.*?)==)"]
+    (s/replace text pattern "{{< logseq/mark >}}$2{{< / logseq/mark >}}")))
+
+
+;; FIXME multiple line replace not working
+(defn- parse-org-cmd
+  [text]
+  (let [pattern #"(?s)#\+BEGIN_([A-Z]*)[^\n]*\n(.*)#\+END_[^\n]*"
+        res (re-find pattern text)]
+    (when (= (count res) 3)
+      (println (str "str: " (nth res 2))))
+    (s/replace text #"(?s)#\+BEGIN_([A-Z]*)[^\n]*\n(.*)#\+END_[^\n]*" "{{< logseq/org$1 >}}$2{{< / logseq/org$1 >}}")))
+
+;; FIXME multiple line replace not working
+(defn- rm-meta-data
+  [text]
+  (let [pattern #"(?s):LOGBOOK:.*:END:"]
+    (s/replace text pattern "")))
+
+(defn- rm-ref-ids
+  [text]
+  (let [pattern #"(\nid:: [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"]
+    (s/replace text pattern "")))
+
+(defn- rm-width-height
+  [text]
+  (let [pattern #"{:height\s*[0-9]*,\s*:width\s*[0-9]*}"]
+    (s/replace text pattern "")))
 
 ;; Parse the text of the :block/content and convert it into markdown
 (defn- parse-text
@@ -229,10 +321,25 @@
       (let [prefix (if (and (get exporter-config :keep-bullets) (not-empty (get current-block-data :block/content)))
                      (str (apply str (concat (repeat (* (- (get block :level) 1) 1) " "))) "+ ")
                      (str ""))
-            block-content (get current-block-data :block/content)]
-        (->> (str block-content "\n")
-             (parse-image)
-             (str prefix))))))
+            block-content (get current-block-data :block/content)
+            marker? (not (nil? (get current-block-data :block/marker)))]
+        (when (or (not marker?) (true? (get exporter-config :export-tasks)))
+          (->> (str block-content "\n")
+               (parse-block-refs)
+               (parse-image)
+               (parse-diagram-as-code)
+               (parse-excalidraw-diagram)
+               (parse-links)
+               (parse-namespaces)
+               (parse-embeds)
+               (parse-video)
+               (parse-markers)
+               (parse-highlights)
+               (parse-org-cmd)
+               (rm-meta-data)
+               (rm-ref-ids)
+               (rm-width-height)
+               (str prefix)))))))
 
 ;; Iterate over every block and parse the :block/content
 (defn- parse-block-content
@@ -309,6 +416,7 @@
           graph-db (or (get-graph-db graph-name)
                        (throw (ex-info "No graph found" {:graph graph-name})))]
       (println (str "Graph " graph-name " loaded successfully."))
+      (println "Type" (type graph-db))
       (setup-outdir)
       (let [public-pages (map #(get % 0) (get-all-public-pages graph-db))]
         (determine-logset-data-path graph-db public-pages)
