@@ -315,7 +315,7 @@
             value (nth res 2)]
         (str "{{< logseq/org" cmd " >}}" value "{{< / logseq/org" cmd " >}}\n")))))
 
-(defn- rm-meta-data
+(defn- rm-logbook-data
   [text]
   (let [pattern #"(?s)(:LOGBOOK:.*:END:)"
         res (re-find pattern text)]
@@ -325,10 +325,14 @@
       (str text)
       (str ""))))
 
-(defn- rm-ref-ids
+(defn- rm-page-properties
   [text]
-  (let [pattern #"(\nid:: [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"]
-    (s/replace text pattern "")))
+  (let [pattern #"([A-Za-z0-9_\-]+::.*)"
+        res (re-find pattern text)]
+    (println (str "rm-page-properties str: " text))
+    (if (empty? res)
+      (str text)
+      (str (rm-page-properties (s/replace text (first res) ""))))))
 
 (defn- rm-width-height
   [text]
@@ -346,24 +350,24 @@
             block-content (get current-block-data :block/content)
             marker? (not (nil? (get current-block-data :block/marker)))]
         (when (or (not marker?) (true? (get exporter-config :export-tasks)))
-          (let [res-line (->> (str block-content)
-                              (parse-block-refs)
-                              (parse-image)
-                              (parse-diagram-as-code)
-                              (parse-excalidraw-diagram)
-                              (parse-links)
-                              (parse-namespaces)
-                              (parse-embeds)
-                              (parse-video)
-                              (parse-markers)
-                              (parse-highlights)
-                              (parse-org-cmd)
-                              (rm-meta-data)
-                              (rm-ref-ids)
-                              (rm-width-height)
-                              (str prefix))]
+          (let [res-line (s/trim-newline (->> (str block-content)
+                                              (parse-block-refs)
+                                              (parse-image)
+                                              (parse-diagram-as-code)
+                                              (parse-excalidraw-diagram)
+                                              (parse-links)
+                                              (parse-namespaces)
+                                              (parse-embeds)
+                                              (parse-video)
+                                              (parse-markers)
+                                              (parse-highlights)
+                                              (parse-org-cmd)
+                                              (rm-logbook-data)
+                                              (rm-page-properties)
+                                              (rm-width-height)
+                                              (str prefix)))]
             (when (not= res-line "")
-              (str (s/trim-newline res-line) "\n\n"))))))))
+              (str res-line "\n\n"))))))))
 
 ;; Iterate over every block and parse the :block/content
 (defn- parse-block-content
