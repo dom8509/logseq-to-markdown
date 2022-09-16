@@ -213,9 +213,13 @@
 (defn- parse-block-refs
   [text]
   (let [pattern #"\(\(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)\)"
-        block-ref-text (re-find pattern text)]
+        block-ref-text (re-find pattern text)
+        alias-pattern #"\[([^\[]*?)\]\([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\)"
+        alias-text (re-find alias-pattern text)]
     (if (empty? block-ref-text)
-      (str text)
+      (if (empty? alias-text)
+        (str text)
+        (str (last alias-text)))
       (let [block-ref-id (last block-ref-text)
             query '[:find ?c
                     :in $ ?block-ref-id
@@ -246,14 +250,27 @@
             (str converted-text))
           (str text))))))
 
-;; TODO implement parse-diagram-as-code
+(def diagram-code (atom {:header-found false :type ""}))
+
 (defn- parse-diagram-as-code
   [text]
-  (let [pattern #"{{render code_diagram,(.*?)}}\n"
-        res (re-find pattern text)]
-    (if (empty? res)
-      (str text)
-      (print "last" res))))
+  (let [header-pattern #"{{renderer code_diagram,(.*?)}}"
+        header-res (re-find header-pattern text)
+        body-pattern #"(?s)```([a-z]*)\n(.*)```"
+        body-res (re-find body-pattern text)]
+    (if (empty? header-res)
+      (if (empty? body-res)
+        (do
+          (reset! diagram-code {:header-found false :type ""})
+          (str text))
+        (do
+          (str
+           "{{<diagram name=\"code_diagram\" type=\"" (:type @diagram-code) "\">}}\n"
+           (last body-res)
+           "{{</diagram>}}")))
+      (do
+        (reset! diagram-code {:header-found true :type (last header-res)})
+        (str "")))))
 
 (defn- parse-excalidraw-diagram
   [text]
@@ -268,10 +285,21 @@
              diagram-content "\n"
              "{{</diagram>}}")))))
 
-;; TODO implement parse-links
 (defn- parse-links
   [text]
-  (str text))
+  (let [link-pattern #"\[\[(.*?)\]\]"
+        link-res (re-find link-pattern text)
+        desc-link-pattern #"\[([a-zA-Z ]*?)\]\(\[\[(.*?)\]\]\)"
+        desc-link-res (re-find desc-link-pattern text)
+        namespace-pattern #"\[\[([^\/]*\/).*\]\]"
+        namespace-res (re-find namespace-pattern text)]
+    (if (empty? desc-link-res)
+      (if (empty? link-res)
+        (str text)
+        (let [namespace-link? (not-empty namespace-res)
+              link-text (or (and namespace-link? (get exporter-config :trim-namespaces) (last (s/split (last link-res) "/"))) (last link-res))]
+          (str "[[[" link-text "]]]" "({{< ref \"/pages/" (convert-filename (last link-res)) "\" >}})")))
+      (str "[" (nth desc-link-res 1) "]" "({{< ref \"/pages/" (convert-filename (last desc-link-res)) "\" >}})"))))
 
 ;; TODO parse-namespaces
 (defn- parse-namespaces
@@ -319,8 +347,6 @@
   [text]
   (let [pattern #"(?s)(:LOGBOOK:.*:END:)"
         res (re-find pattern text)]
-    (when (not-empty res)
-      (println (str "parse-org-cmd res" res)))
     (if (empty? res)
       (str text)
       (str ""))))
@@ -329,7 +355,6 @@
   [text]
   (let [pattern #"([A-Za-z0-9_\-]+::.*)"
         res (re-find pattern text)]
-    (println (str "rm-page-properties str: " text))
     (if (empty? res)
       (str text)
       (str (rm-page-properties (s/replace text (first res) ""))))))
@@ -338,6 +363,14 @@
   [text]
   (let [pattern #"{:height\s*[0-9]*,\s*:width\s*[0-9]*}"]
     (s/replace text pattern "")))
+
+(defn- rm-brackets
+  [text]
+  (let [pattern #"(?:\[\[|\]\])"
+        res (re-find pattern text)]
+    (if (or (empty? res) (false? (get exporter-config :rm-brackets)))
+      (str text)
+      (str (rm-brackets (s/replace text pattern ""))))))
 
 ;; Parse the text of the :block/content and convert it into markdown
 (defn- parse-text
@@ -365,6 +398,7 @@
                                               (rm-logbook-data)
                                               (rm-page-properties)
                                               (rm-width-height)
+                                              (rm-brackets)
                                               (str prefix)))]
             (when (not= res-line "")
               (str res-line "\n\n"))))))))
@@ -444,7 +478,6 @@
           graph-db (or (get-graph-db graph-name)
                        (throw (ex-info "No graph found" {:graph graph-name})))]
       (println (str "Graph " graph-name " loaded successfully."))
-      (println "Type" (type graph-db))
       (setup-outdir)
       (let [public-pages (map #(get % 0) (get-all-public-pages graph-db))]
         (determine-logset-data-path graph-db public-pages)
