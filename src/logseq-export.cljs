@@ -285,8 +285,15 @@
 
 (defn- parse-video
   [text]
-  (let [pattern #"{{(?:video|youtube|vimeo) (.*?)}}"]
-    (s/replace text pattern "{{< video $1 >}}")))
+  (let [pattern #"{{(?:video|youtube) (.*?)}}"
+        res (re-find pattern text)]
+    (if (empty? res)
+      (str text)
+      (let [title-pattern #"(youtu(?:.*\/v\/|.*v\=|\.be\/))([A-Za-z0-9_\-]{11})"
+            title (re-find title-pattern text)]
+        (if (empty? title)
+          (str text)
+          (str "{{< youtube " (last title) " >}}"))))))
 
 ;; TODO parse-markers
 (defn- parse-markers
@@ -298,24 +305,25 @@
   (let [pattern #"(==(.*?)==)"]
     (s/replace text pattern "{{< logseq/mark >}}$2{{< / logseq/mark >}}")))
 
-
-;; FIXME multiple line replace not working
 (defn- parse-org-cmd
   [text]
   (let [pattern #"(?sm)#\+BEGIN_([A-Z]*)[^\n]*\n(.*)#\+END_[^\n]*"
         res (re-find pattern text)]
-    (when (not-empty res)
-      (println (str "parse-org-cmd res" res)))
-    (s/replace text pattern "{{< logseq/org$1 >}}$2{{< / logseq/org$1 >}}")))
+    (if (empty? res)
+      (str text)
+      (let [cmd (nth res 1)
+            value (nth res 2)]
+        (str "{{< logseq/org" cmd " >}}" value "{{< / logseq/org" cmd " >}}\n")))))
 
-;; FIXME multiple line replace not working
 (defn- rm-meta-data
   [text]
   (let [pattern #"(?s)(:LOGBOOK:.*:END:)"
         res (re-find pattern text)]
     (when (not-empty res)
       (println (str "parse-org-cmd res" res)))
-    (s/replace text pattern "")))
+    (if (empty? res)
+      (str text)
+      (str ""))))
 
 (defn- rm-ref-ids
   [text]
@@ -338,22 +346,24 @@
             block-content (get current-block-data :block/content)
             marker? (not (nil? (get current-block-data :block/marker)))]
         (when (or (not marker?) (true? (get exporter-config :export-tasks)))
-          (->> (str block-content "\n")
-               (parse-block-refs)
-               (parse-image)
-               (parse-diagram-as-code)
-               (parse-excalidraw-diagram)
-               (parse-links)
-               (parse-namespaces)
-               (parse-embeds)
-               (parse-video)
-               (parse-markers)
-               (parse-highlights)
-               (parse-org-cmd)
-               (rm-meta-data)
-               (rm-ref-ids)
-               (rm-width-height)
-               (str prefix)))))))
+          (let [res-line (->> (str block-content)
+                              (parse-block-refs)
+                              (parse-image)
+                              (parse-diagram-as-code)
+                              (parse-excalidraw-diagram)
+                              (parse-links)
+                              (parse-namespaces)
+                              (parse-embeds)
+                              (parse-video)
+                              (parse-markers)
+                              (parse-highlights)
+                              (parse-org-cmd)
+                              (rm-meta-data)
+                              (rm-ref-ids)
+                              (rm-width-height)
+                              (str prefix))]
+            (when (not= res-line "")
+              (str (s/trim-newline res-line) "\n\n"))))))))
 
 ;; Iterate over every block and parse the :block/content
 (defn- parse-block-content
