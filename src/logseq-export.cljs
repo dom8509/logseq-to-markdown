@@ -501,10 +501,10 @@
     (d/q query graph-db)))
 
 (def cli-options
-  [["-e" "--excluded-properties " "Comma separated list of properties that should be ignored"
+  [["-e" "--excluded-properties" "Comma separated list of properties that should be ignored"
     :multi true
     :default #{:filters :public}
-    :required "PATH"
+    :required "PROPERTY_LIST"
     :parse-fn #(set (map (fn [x] (keyword (s/trim x))) (s/split % ",")))
     :update-fn concat]
    ["-n" "--trim-namespaces" "Trim Namespace Names"
