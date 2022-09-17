@@ -263,6 +263,7 @@
           (str text))))))
 
 (def diagram-code (atom {:header-found false :type ""}))
+(def diagram-code-count (atom 0))
 
 (defn- parse-diagram-as-code
   [text]
@@ -275,11 +276,12 @@
         (do
           (reset! diagram-code {:header-found false :type ""})
           (str text))
-        (do
-          (str
-           "{{<diagram name=\"code_diagram\" type=\"" (:type @diagram-code) "\">}}\n"
-           (last body-res)
-           "{{</diagram>}}")))
+        (let [res-str (str
+                       "{{<diagram name=\"code_diagram_" @diagram-code-count "\" type=\"" (:type @diagram-code) "\">}}\n"
+                       (last body-res)
+                       "{{</diagram>}}")]
+          (swap! diagram-code-count inc 1)
+          res-str))
       (do
         (reset! diagram-code {:header-found true :type (last header-res)})
         (str "")))))
@@ -297,8 +299,6 @@
              diagram-content "\n"
              "{{</diagram>}}")))))
 
-;; FIXME links to not existing pages should be converted to text
-;; FIXME Code wird noch abgeschnitten
 (defn- parse-links
   [text]
   (let [link-pattern #"\[\[(.*?)\]\]"
