@@ -1,10 +1,9 @@
 {
   "name": "@dom8509/logseq-exporter",
-  "version": "0.0.1",
-  "description": "Export Logseq Graph to (Hugo) Markdown",
+  "version": "0.1.0",
+  "description": "Export Logseq Graph to (Hugo) Markdown.",
   "dependencies": {
     "@dom8509/nbb-logseq": "0.7.134"
-    
   },
   "repository": {
     "type": "git",

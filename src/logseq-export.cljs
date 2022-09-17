@@ -12,7 +12,8 @@
             [datascript.core :as d]
             [nbb.core :as nbb]
             [cljs-time.coerce :as tc]
-            [cljs-time.core :as t])
+            [cljs-time.core :as t]
+            [clojure.tools.cli :refer [parse-opts]])
   (:refer-clojure :exclude [exists?]))
 
 ;; fs utils
@@ -37,20 +38,19 @@
   [file]
   (.isDirectory (fs/lstatSync file)))
 
-;; config file
-(def config-file "./config.edn")
-
 (def exporter-config-data (atom {}))
 
-(def exporter-config
-  (when (empty? @exporter-config-data)
-    (if (exists? config-file)
-      (let [data (edn/read-string (slurp config-file))]
-        (reset! exporter-config-data data))
-      (println (str "Config file " config-file " not found.")))))
+(defn- set-exporter-config
+  [config-data]
+  (reset! exporter-config-data config-data))
 
-(def verbose-mode?
-  (get exporter-config :verbose))
+(defn- get-exporter-config
+  [key]
+  (if (empty? @exporter-config-data)
+    (do
+      (println "Error: Config not set!")
+      nil)
+    (get @exporter-config-data key)))
 
 ;; graph utils
 (defn get-graph-paths
@@ -89,7 +89,7 @@
 (defn- copy-asset
   [link]
   (let [src-path (str @logseq-data-path link)
-        dst-path (str (get exporter-config :output-dir) link)]
+        dst-path (str (get-exporter-config :outputdir) link)]
     (fs/copyFileSync src-path dst-path)))
 
 (defn get-graph-path
@@ -126,7 +126,7 @@
 
 (defn- setup-outdir
   []
-  (let [output-dir (get exporter-config :output-dir)
+  (let [output-dir (get-exporter-config :outputdir)
         subfolders ["pages" "assets"]]
     (when (exists? output-dir)
       (fs/rmSync output-dir #js {:recursive true}))
@@ -136,7 +136,7 @@
 
 (defn- store-page
   [page-data]
-  (let [output-dir-base (get exporter-config :output-dir)
+  (let [output-dir-base (get-exporter-config :outputdir)
         output-dir (str output-dir-base "/pages/" (get page-data :namespace))
         full-file-name (str output-dir "/" (get page-data :filename))]
     (fs/mkdirSync output-dir #js {:recursive true})
@@ -185,13 +185,13 @@
 (defn- parse-meta-data
   [page]
   (let [original-name (get page :block/original-name)
-        trim-namespaces? (get exporter-config :trim-namespaces)
+        trim-namespaces? (get-exporter-config :trim-namespaces)
         namespace? (s/includes? original-name "/")
         namespace (let [tokens (s/split original-name "/")]
                     (s/join "/" (subvec tokens 0 (- (count tokens) 1))))
         title (or (and trim-namespaces? namespace? (last (s/split original-name "/"))) original-name)
         file (str (convert-filename (or (and namespace? (last (s/split original-name "/"))) original-name)) ".md")
-        excluded-properties (get exporter-config :excluded-properties)
+        excluded-properties (get-exporter-config :excluded-properties)
         properties (into {} (filter #(not (contains? excluded-properties (first %))) (get page :block/properties)))
         tags (get properties :tags)
         categories (get properties :categories)
@@ -206,7 +206,7 @@
                            (str "date: " created-at "\n")
                            (str "lastMod: " updated-at "\n")
                            "---\n"])]
-    (when verbose-mode?
+    (when (get-exporter-config :verbose)
       (println "======================================")
       (println (str "Title: " title))
       (println (str "Namespace?: " namespace?))
@@ -316,7 +316,7 @@
                 namespace-pattern #"\[\[([^\/]*\/).*\]\]"
                 namespace-res (re-find namespace-pattern text)
                 namespace-link? (not-empty namespace-res)
-                link-text (or (and namespace-link? (get exporter-config :trim-namespaces)
+                link-text (or (and namespace-link? (get-exporter-config :trim-namespaces)
                                    (last (s/split current-link "/"))) current-link)
                 replaced-str (or (and (page-exists? current-link) (str "[[[" link-text "]]]({{< ref \"/pages/" (convert-filename current-link) "\" >}})"))
                                  (str link-text))]
@@ -399,7 +399,7 @@
   [text]
   (let [pattern #"(?:\[\[|\]\])"
         res (re-find pattern text)]
-    (if (or (empty? res) (false? (get exporter-config :rm-brackets)))
+    (if (or (empty? res) (false? (get-exporter-config :rm-brackets)))
       (str text)
       (str (rm-brackets (s/replace text pattern ""))))))
 
@@ -408,12 +408,12 @@
   [block]
   (let [current-block-data (get block :data)]
     (when (not (and (get current-block-data :block/pre-block?) (= (get block :level) 1)))
-      (let [prefix (if (and (get exporter-config :keep-bullets) (not-empty (get current-block-data :block/content)))
+      (let [prefix (if (and (get-exporter-config :keep-bullets) (not-empty (get current-block-data :block/content)))
                      (str (apply str (concat (repeat (* (- (get block :level) 1) 1) " "))) "+ ")
                      (str ""))
             block-content (get current-block-data :block/content)
             marker? (not (nil? (get current-block-data :block/marker)))]
-        (when (or (not marker?) (true? (get exporter-config :export-tasks)))
+        (when (or (not marker?) (true? (get-exporter-config :export-tasks)))
           (let [res-line (s/trim-newline (->> (str block-content)
                                               (parse-block-refs)
                                               (parse-image)
@@ -500,22 +500,83 @@
                 [?p :block/name ?n]]]
     (d/q query graph-db)))
 
+(def cli-options
+  [["-e" "--excluded-properties " "Comma separated list of properties that should be ignored"
+    :multi true
+    :default #{:filters :public}
+    :required "PATH"
+    :parse-fn #(set (map (fn [x] (keyword (s/trim x))) (s/split % ",")))
+    :update-fn concat]
+   ["-n" "--trim-namespaces" "Trim Namespace Names"
+    :default false]
+   ["-b" "--keep-bullets" "Keep Outliner Bullets"
+    :default false]
+   ["-t" "--export-tasks" "Export Logseq Tasks"
+    :default false]
+   ["-r" "--rm-brackets" "Remove Link Brackets"
+    :default false]
+   ["-o" "--outputdir" "Output Directory"
+    :default "./out"
+    :required "PATH"]
+   ["-v" "--verbose" "Verbose Output"
+    :default false]
+   ["-h" "--help"]])
+
+(defn usage [options-summary]
+  (->> ["Export your local Logseq Graph to (Hugo) Markdown files."
+        ""
+        "Usage: logseq-exporter [options] graph"
+        ""
+        "Options:"
+        options-summary
+        ""
+        "Graph: Name of the Logseq Graph"
+        ""
+        "Please refer to the manual page for more information."]
+       (s/join \newline)))
+
+(defn error-msg
+  [errors]
+  (str "The following errors occurred while parsing your command:\n\n"
+       (s/join \newline errors)))
+
+(defn validate-args
+  "Validate command line arguments. Either return a map indicating the program
+  should exit (with an error message, and optional ok status), or a map
+  indicating the action the program should take and the options provided."
+  [args]
+  (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
+    (cond
+      (:help options) ; help => exit OK with usage summary
+      {:exit-message (usage summary) :ok? true}
+      errors ; errors => exit with description of errors
+      {:exit-message (error-msg errors)}
+      ;; custom validation on arguments
+      (>= (count arguments) 1)
+      {:graph-name (first arguments) :options options}
+      :else ; failed custom validation => exit with usage summary
+      {:exit-message (usage summary)})))
+
+(defn exit
+  [status msg]
+  (println msg))
+
 (defn -main
   [args]
-  (if-not (= 1 (count args))
-    (println "Usage: $0 GRAPH")
-    ;; Load the logseq graph
-    (let [graph-name (get (vec args) 0)
-          graph-db (or (get-graph-db graph-name)
-                       (throw (ex-info "No graph found" {:graph graph-name})))]
-      (println (str "Graph " graph-name " loaded successfully."))
-      (setup-outdir)
-      (let [public-pages (map #(get % 0) (get-all-public-pages graph-db))]
-        (determine-logset-data-path graph-db public-pages)
-        (dorun
-         (for [public-page public-pages]
-           (let [page-data (parse-page-blocks graph-db public-page)]
-             (store-page page-data))))))))
+  (let [{:keys [graph-name options exit-message ok?]} (validate-args args)]
+    (if exit-message
+      (exit (if ok? 0 1) exit-message)
+      (let [graph-db (or (get-graph-db graph-name)
+                         (throw (ex-info "No graph found" {:graph graph-name})))]
+        (println (str "Graph " graph-name " loaded successfully."))
+        (set-exporter-config options)
+        (setup-outdir)
+        (let [public-pages (map #(get % 0) (get-all-public-pages graph-db))]
+          (determine-logset-data-path graph-db public-pages)
+          (dorun
+           (for [public-page public-pages]
+             (let [page-data (parse-page-blocks graph-db public-page)]
+               (store-page page-data)))))))))
 
 (when (= nbb/*file* (:file (meta #'-main)))
   (-main *command-line-args*))

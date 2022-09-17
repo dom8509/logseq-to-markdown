@@ -2,5 +2,7 @@ node_modules/
 out/
 .clj-kondo/
 .lsp/
+.calva/
 *.log
 .DS_Store
+.nrepl-port
