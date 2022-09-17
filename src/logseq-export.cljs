@@ -97,18 +97,18 @@
   (some #(when (= graph (full-path->graph %)) %)
         (get-graph-paths)))
 
-(def graph-db (atom {:loaded false}))
+(def graph-db (atom {}))
 
 (defn- get-graph-db
   [graph]
-  (when (not (get @graph-db :loaded))
+  (when (empty? @graph-db)
     (when-let [file (or (get-graph-path graph)
                       ;; graph is a path
                         graph)]
       (when (exists? file)
         (println "Loading graph.")
-        (reset! graph-db {:loaded true :db (-> file slurp dt/read-transit-str)}))))
-  (get @graph-db :db))
+        (reset! graph-db (-> file slurp dt/read-transit-str)))))
+  @graph-db)
 
 (defn- format-date
   [date]
@@ -146,6 +146,18 @@
   [filename]
   (let [replace-pattern #"([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])"]
     (s/replace filename replace-pattern "")))
+
+(defn- page-exists?
+  [link]
+  (let [query '[:find ?p
+                :in $ ?link
+                :where
+                [?p :block/original-name ?link]
+                [?p :block/properties ?pr]
+                [(get ?pr :public) ?t]
+                [(= true ?t)]]
+        query-res (d/q query (get-graph-db) link)]
+    (not-empty query-res)))
 
 (defn- parse-property-value-list
   [property-value]
@@ -285,21 +297,40 @@
              diagram-content "\n"
              "{{</diagram>}}")))))
 
+;; FIXME links to not existing pages should be converted to text
+;; FIXME Code wird noch abgeschnitten
 (defn- parse-links
   [text]
   (let [link-pattern #"\[\[(.*?)\]\]"
-        link-res (re-find link-pattern text)
-        desc-link-pattern #"\[([a-zA-Z ]*?)\]\(\[\[(.*?)\]\]\)"
-        desc-link-res (re-find desc-link-pattern text)
+        link-res (re-seq link-pattern text)
+        desc-link-pattern #"\[(.*?)\]\(\[\[(.*?)\]\]\)"
+        desc-link-res (re-seq desc-link-pattern text)
         namespace-pattern #"\[\[([^\/]*\/).*\]\]"
         namespace-res (re-find namespace-pattern text)]
     (if (empty? desc-link-res)
       (if (empty? link-res)
         (str text)
-        (let [namespace-link? (not-empty namespace-res)
-              link-text (or (and namespace-link? (get exporter-config :trim-namespaces) (last (s/split (last link-res) "/"))) (last link-res))]
-          (str "[[[" link-text "]]]" "({{< ref \"/pages/" (convert-filename (last link-res)) "\" >}})")))
-      (str "[" (nth desc-link-res 1) "]" "({{< ref \"/pages/" (convert-filename (last desc-link-res)) "\" >}})"))))
+        (reduce
+         #(let [current-text (first %2)
+                current-link (last %2)
+                namespace-pattern #"\[\[([^\/]*\/).*\]\]"
+                namespace-res (re-find namespace-pattern text)
+                namespace-link? (not-empty namespace-res)
+                link-text (or (and namespace-link? (get exporter-config :trim-namespaces)
+                                   (last (s/split current-link "/"))) current-link)
+                replaced-str (or (and (page-exists? current-link) (str "[[[" link-text "]]]({{< ref \"/pages/" (convert-filename current-link) "\" >}})"))
+                                 (str link-text))]
+            (s/replace %1 current-text replaced-str))
+         text
+         link-res))
+      (reduce #(let [current-text (first %2)
+                     current-link (last %2)
+                     link-text (nth %2 1)
+                     replaced-str (or (and (page-exists? current-link) (str "[" link-text "]({{< ref \"/pages/" (convert-filename current-link) "\" >}})"))
+                                      (str link-text))]
+                 (s/replace %1 current-text replaced-str))
+              text
+              desc-link-res))))
 
 ;; TODO parse-namespaces
 (defn- parse-namespaces
