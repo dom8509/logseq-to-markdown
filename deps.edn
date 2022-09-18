@@ -1,1 +1,2 @@
-{:deps {org.clojure/tools.cli {:mvn/version "1.0.206"}}
+{:deps 
+ {org.clojure/tools.cli {:mvn/version "1.0.206"}}}

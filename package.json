@@ -5,6 +5,9 @@
   "dependencies": {
     "@dom8509/nbb-logseq": "0.7.134"
   },
+  "bin": {
+    "export-logseq": "src/logseq-exporter.cljs"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/dom8509/logseq-exporter"
@@ -22,7 +25,7 @@
   ],
   "license": "MIT",
   "scripts": {
-    "logseq-export": "nbb-logseq --debug src/logseq-export.cljs",
+    "export-logseq": "nbb-logseq --debug src/logseq-exporter.cljs",
     "clean": "rm -fR node_modules;"
   }
 }
