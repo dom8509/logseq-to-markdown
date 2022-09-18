@@ -6,7 +6,7 @@
     "@dom8509/nbb-logseq": "0.7.134"
   },
   "bin": {
-    "export-logseq": "src/logseq-exporter.cljs"
+    "logseq-exporter": "index.mjs"
   },
   "repository": {
     "type": "git",
@@ -23,9 +23,5 @@
     "markdown",
     "exporter"
   ],
-  "license": "MIT",
-  "scripts": {
-    "export-logseq": "nbb-logseq --debug src/logseq-exporter.cljs",
-    "clean": "rm -fR node_modules;"
-  }
+  "license": "MIT"
 }

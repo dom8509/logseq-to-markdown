@@ -3,7 +3,7 @@ A tool to export your local Logseq Graph including all Assets and Excalidraw Dia
 
 ## Setup
 
-Install `logset-exporter` from npm:
+Install `logseq-exporter` from npm:
 
 `npm install @dom8509/logseq-exporter -g`
 

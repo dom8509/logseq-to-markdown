@@ -601,4 +601,4 @@
                (store-page page-data)))))))))
 
 (when (= nbb/*file* (:file (meta #'-main)))
-  (-main *command-line-args*))
+  (-main (js->clj (.slice js/process.argv 2))))
