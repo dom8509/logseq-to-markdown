@@ -1,18 +1,9 @@
-{:paths ["src" "resources"]
+{:paths ["src"]
  :deps
  {io.lambdaforge/datalog-parser {:mvn/version "0.1.11"}
   me.tagaholic/dlint {:mvn/version "0.1.0"}}
  :tasks
  {:requires ([clojure.string :as str])
-
-  copy-test-db
-  {:requires ([cldwalker.logseq-query.util :as util]
-              [babashka.fs :as fs])
-   :doc "Copy test-notes db from ~/.logseq/graphs to test"
-   :task (fs/copy
-          (util/get-graph-path "test-notes")
-          "test/cldwalker/logseq_query/test-notes.json"
-          {:replace-existing true})}
 
   ;; Publish tasks copied from nbb
   publish {:doc "Bump to version, pushes tag and lets CI publish to npm."
