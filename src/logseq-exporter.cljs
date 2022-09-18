@@ -29,7 +29,6 @@
 
 (defn slurp
   [file]
-  (println (str "Loading file " file))
   (fs/readFileSync file #js {:encoding "utf-8"}))
 
 (defn exists?
@@ -593,12 +592,14 @@
         (println (str "Graph " graph-name " loaded successfully."))
         (set-exporter-config options)
         (setup-outdir)
+        (println (str "Exporting data to " (get-exporter-config :outputdir) " ..."))
         (let [public-pages (map #(get % 0) (get-all-public-pages graph-db))]
           (determine-logset-data-path graph-db public-pages)
           (dorun
            (for [public-page public-pages]
              (let [page-data (parse-page-blocks graph-db public-page)]
-               (store-page page-data)))))))))
+               (store-page page-data)))))))
+    (println "finished!")))
 
 (when (= nbb/*file* (:file (meta #'-main)))
   (-main (js->clj (.slice js/process.argv 2))))
