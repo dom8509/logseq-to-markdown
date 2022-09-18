@@ -3,6 +3,7 @@ out/
 .clj-kondo/
 .lsp/
 .calva/
+.cpcache/
 *.log
 .DS_Store
 .nrepl-port

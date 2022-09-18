@@ -1,10 +1,9 @@
-(ns logseq-exporter
+(ns logseq-to-markdown
   "Script that exports your local Logseq graph to (Hugo) 
    Markdown files."
   (:require ["fs" :as fs]
             ["path" :as path]
             ["os" :as os]
-            [clojure.edn :as edn]
             [clojure.string :as s]
             [datascript.transit :as dt]
             [datascript.core :as d]
@@ -348,7 +347,7 @@
         (if (empty? query-res)
           (str text)
           (let [data (map #(get % 0) query-res)
-                heading (str "***Namespace " 
+                heading (str "***Namespace "
                              (if (page-exists? namespace-name)
                                (str "[" namespace-name "]({{< ref \"/pages/" (->filename namespace-name) "\" >}})***\n")
                                (str namespace-name "***\n")))
@@ -427,11 +426,16 @@
 ;; Parse the text of the :block/content and convert it into markdown
 (defn- parse-text
   [block]
-  (let [current-block-data (get block :data)]
-    (when (not (and (get current-block-data :block/pre-block?) (= (get block :level) 1)))
-      (let [prefix (if (and (get-exporter-config :keep-bullets) (not-empty (get current-block-data :block/content)))
-                     (str (apply str (concat (repeat (* (- (get block :level) 1) 1) "\t"))) "+ ")
-                     (str ""))
+  (let [current-block-data (get block :data)
+        block-level (get block :level)]
+    (when (not (and (get current-block-data :block/pre-block?) (= block-level 1)))
+      (let [prefix (if (and (get-exporter-config :keep-bullets)
+                            (not-empty (get current-block-data :block/content)))
+                     (str (apply str (concat (repeat (* (- block-level 1) 1) "\t"))) "+ ")
+                     (if (and (not= block-level 1)
+                              (not-empty (get current-block-data :block/content)))
+                       (str (apply str (concat (repeat (* (- block-level 2) 1) "\t"))) "+ ")
+                       (str "")))
             block-content (get current-block-data :block/content)
             marker? (not (nil? (get current-block-data :block/marker)))]
         (when (or (not marker?) (true? (get-exporter-config :export-tasks)))
@@ -441,7 +445,7 @@
                                               (parse-diagram-as-code)
                                               (parse-excalidraw-diagram)
                                               (parse-links)
-                                              (parse-namespaces (get block :level))
+                                              (parse-namespaces block-level)
                                               (parse-embeds)
                                               (parse-video)
                                               (parse-markers)
@@ -546,7 +550,7 @@
 (defn usage [options-summary]
   (->> ["Export your local Logseq Graph to (Hugo) Markdown files."
         ""
-        "Usage: logseq-exporter [options] graph"
+        "Usage: logseq-to-markdown [options] graph"
         ""
         "Options:"
         options-summary
@@ -598,8 +602,8 @@
           (dorun
            (for [public-page public-pages]
              (let [page-data (parse-page-blocks graph-db public-page)]
-               (store-page page-data)))))))
-    (println "finished!")))
+               (store-page page-data)))))
+        (println "finished!")))))
 
 (when (= nbb/*file* (:file (meta #'-main)))
   (-main (js->clj (.slice js/process.argv 2))))

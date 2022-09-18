@@ -5,9 +5,9 @@ A tool to export your local Logseq Graph including all Assets and Excalidraw Dia
 
 ## Setup
 
-Install `logseq-exporter` from npm:
+Install `logseq-to-markdown` from npm:
 
-`npm install @dom8509/logseq-exporter -g`
+`npm install @dom8509/logseq-to-markdown -g`
 
 Omit `-g` for a local install.
 
@@ -18,7 +18,7 @@ Omit `-g` for a local install.
 ```sh
 Export your local Logseq Graph to (Hugo) Markdown files.
 
-Usage: logseq-exporter [options] graph
+Usage: logseq-to-markdown [options] graph
 
 Options:
   -e, --excluded-properties PATH  #{:filters :public}  Comma separated list of properties that should be ignored
