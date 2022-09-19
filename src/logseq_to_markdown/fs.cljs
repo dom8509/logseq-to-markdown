@@ -33,15 +33,20 @@
   (let [replace-pattern #"([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])"]
     (s/replace filename replace-pattern "")))
 
+(defn- mkdirSync->try
+  [dir]
+  (when (not (exists? dir))
+    (fs/mkdirSync dir)))
+
 (defn setup-outdir
   []
   (let [output-dir (config/entry :outputdir)
         subfolders ["pages" "assets"]]
-    (when (exists? output-dir)
+    (when (and (true? (config/entry :delete-outputdir)) (exists? output-dir))
       (fs/rmSync output-dir #js {:recursive true}))
-    (fs/mkdirSync output-dir)
+    (mkdirSync->try output-dir)
     (dorun
-     (map #(fs/mkdirSync (str output-dir "/" %)) subfolders))))
+     (map #(mkdirSync->try (str output-dir "/" %)) subfolders))))
 
 (defn store-page
   [page-data]

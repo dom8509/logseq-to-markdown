@@ -3,7 +3,10 @@
             [clojure.string :as s]))
 
 (def cli-options
-  [["-e" "--excluded-properties" "Comma separated list of properties that should be ignored"
+  [["-o" "--outputdir" "Output Directory"
+    :default "./out"
+    :required "PATH"]
+   ["-e" "--excluded-properties" "Comma separated list of properties that should be ignored"
     :multi true
     :default #{:filters :public}
     :required "PROPERTY_LIST"
@@ -17,9 +20,8 @@
     :default false]
    ["-r" "--rm-brackets" "Remove Link Brackets"
     :default false]
-   ["-o" "--outputdir" "Output Directory"
-    :default "./out"
-    :required "PATH"]
+   ["-d" "--delete-outputdir" "Delete output directory before exporting data"
+    :default false]
    ["-v" "--verbose" "Verbose Output"
     :default false]
    ["-h" "--help"]])
