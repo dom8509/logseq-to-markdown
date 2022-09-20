@@ -112,18 +112,42 @@
         body-pattern #"(?s)```([a-z]*)\n(.*)```"
         body-res (re-find body-pattern text)]
     (if (empty? header-res)
-      (if (empty? body-res)
+      (if (or (empty? body-res) (false? (:header-found @diagram-code)))
         (do
           (reset! diagram-code {:header-found false :type ""})
           (str text))
         (let [res-str (str
-                       "{{<diagram name=\"code_diagram_" @diagram-code-count "\" type=\"" (:type @diagram-code) "\">}}\n"
+                       "{{<kroki_diagram name=\"code_diagram_" @diagram-code-count "\" type=\"" (:type @diagram-code) "\">}}\n"
                        (last body-res)
-                       "{{</diagram>}}")]
+                       "{{</kroki_diagram>}}")]
           (swap! diagram-code-count inc 1)
           res-str))
       (do
         (reset! diagram-code {:header-found true :type (last header-res)})
+        (str "")))))
+
+(def echart-code (atom {:header-found false}))
+(def echart-code-count (atom 0))
+
+(defn parse-echart
+  [text]
+  (let [header-pattern #"{{renderer :logseq-echarts,(.*?)}}"
+        header-res (re-find header-pattern text)
+        body-pattern #"(?s)```([a-z]*)\n(.*)```"
+        body-res (re-find body-pattern text)]
+    (if (empty? header-res)
+      (if (or (empty? body-res) (false? (:header-found @echart-code)))
+        (do
+          (reset! echart-code {:header-found false :type ""})
+          (str text))
+        (let [res-str (str
+                       "{{<echart_diagram name=\"echart_diagram_" @echart-code-count "\">}}\n"
+                       (last body-res)
+                       "{{</echart_diagram>}}")]
+          (swap! echart-code-count inc 1)
+          res-str))
+      (do
+        (reset! echart-code {:header-found true})
         (str "")))))
 
 (defn parse-excalidraw-diagram
@@ -259,14 +283,14 @@
 ;; Parse the text of the :block/content and convert it into markdown
 (defn parse-text
   [block]
-  (let [current-block-data (get block :data)
-        block-level (get block :level)]
-    (when (not (and (get current-block-data :block/pre-block?) (= block-level 1)))
-      (let [prefix (if (and (config/entry :keep-bullets)
-                            (not-empty (get current-block-data :block/content)))
+  (let [current-block-data (:data block)
+        block-level (:level block)]
+    (when (not (and (:block/pre-block? current-block-data) (= block-level 1)))
+      (let [prefix (if (and (:keep-bullets config/entry)
+                            (not-empty (:block/content current-block-data)))
                      (str (apply str (concat (repeat (* (- block-level 1) 1) "\t"))) "+ ")
                      (if (and (not= block-level 1)
-                              (not-empty (get current-block-data :block/content)))
+                              (not-empty (:block/content current-block-data)))
                        (str (apply str (concat (repeat (* (- block-level 2) 1) "\t"))) "+ ")
                        (str "")))
             block-content (get current-block-data :block/content)
@@ -276,6 +300,7 @@
                                               (parse-block-refs)
                                               (parse-image)
                                               (parse-diagram-as-code)
+                                              (parse-echart)
                                               (parse-excalidraw-diagram)
                                               (parse-links)
                                               (parse-namespaces block-level)
