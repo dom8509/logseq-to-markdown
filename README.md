@@ -40,8 +40,7 @@ Please refer to the manual page for more information.
 
 ## Issues
 
-See the [open issues](https://github.com/sawhney17/logseq-schrodinger/issues) for a full list of proposed features (and known issues).
-
+See the [open issues](https://github.com/dom8509/logseq-to-markdown/issues) for a full list of proposed features (and known issues).
 
 ### What works
 
@@ -76,7 +75,6 @@ Don't forget to give the project a star! Thanks again!
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 <!-- LICENSE -->
-
 ## License
 
 Distributed under the MIT License. See `LICENSE.txt` for more information.
