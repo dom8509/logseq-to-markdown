@@ -21,13 +21,14 @@ Export your local Logseq Graph to (Hugo) Markdown files.
 Usage: logseq-to-markdown [options] graph
 
 Options:
-  -e, --excluded-properties PATH  #{:filters :public}  Comma separated list of properties that should be ignored
-  -n, --trim-namespaces                                Trim Namespace Names
-  -b, --keep-bullets                                   Keep Outliner Bullets
-  -t, --export-tasks                                   Export Logseq Tasks
-  -r, --rm-brackets                                    Remove Link Brackets
-  -o, --outputdir PATH            ./out                Output Directory
-  -v, --verbose                                        Verbose Output
+  -o, --outputdir PATH                     ./out                Output Directory
+  -e, --excluded-properties PROPERTY_LIST  #{:filters :public}  Comma separated list of properties that should be ignored
+  -n, --trim-namespaces                                         Trim Namespace Names
+  -b, --keep-bullets                                            Keep Outliner Bullets
+  -t, --export-tasks                                            Export Logseq Tasks
+  -r, --rm-brackets                                             Remove Link Brackets
+  -d, --delete-outputdir                                        Delete output directory before exporting data
+  -v, --verbose                                                 Verbose Output
   -h, --help
 
 Graph: Name of the Logseq Graph
