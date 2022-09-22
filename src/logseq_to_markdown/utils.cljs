@@ -1,6 +1,7 @@
 (ns logseq-to-markdown.utils
   (:require [cljs-time.coerce :as tc]
-            [cljs-time.core :as t]))
+            [cljs-time.core :as t]
+            [clojure.string :as s]))
 
 (defn- format-date
   [date]
@@ -15,3 +16,8 @@
         month (format-date (t/month date))
         day (format-date (t/day date))]
     (str year "-" month "-" day)))
+
+(defn trim-newlines
+  "Trim newlines on the begining and end of the strim"
+  [text]
+  (s/reverse (s/trim-newline (s/reverse (s/trim-newline text)))))

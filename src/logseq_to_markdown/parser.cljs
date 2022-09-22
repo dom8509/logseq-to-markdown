@@ -76,21 +76,21 @@
         alias-text (re-find alias-pattern text)]
     (if (empty? block-ref-text)
       (if (empty? alias-text)
-        (str text)
+        text
         (str (last alias-text)))
       (let [block-ref-id (last block-ref-text)
             data (graph/get-ref-block block-ref-id)]
         (if (seq data)
           (let [id-pattern (re-pattern (str "id:: " block-ref-id))]
             (s/replace data id-pattern ""))
-          (str text))))))
+          text)))))
 
 (defn parse-image
   [text]
   (let [pattern #"!\[.*?\]\((.*?)\)"
         image-text (re-find pattern text)]
     (if (empty? image-text)
-      (str text)
+      text
       (let [link (nth image-text 1)
             converted-link (s/replace link #"\.\.\/" "/")
             converted-text (s/replace text #"\.\.\/" "/")]
@@ -100,7 +100,7 @@
              (str (graph/get-logseq-data-path) converted-link)
              (str (config/entry :outputdir) converted-link))
             (str converted-text))
-          (str text))))))
+          text)))))
 
 (def diagram-code (atom {:header-found false :type ""}))
 (def diagram-code-count (atom 0))
@@ -115,7 +115,7 @@
       (if (or (empty? body-res) (false? (:header-found @diagram-code)))
         (do
           (reset! diagram-code {:header-found false :type ""})
-          (str text))
+          text)
         (let [res-str (str
                        "{{<kroki_diagram name=\"code_diagram_" @diagram-code-count "\" type=\"" (:type @diagram-code) "\">}}\n"
                        (last body-res)
@@ -139,7 +139,7 @@
       (if (or (empty? body-res) (false? (:header-found @echart-code)))
         (do
           (reset! echart-code {:header-found false :type ""})
-          (str text))
+          text)
         (let [res-str (str
                        "{{<echart_diagram name=\"echart_diagram_" @echart-code-count "\">}}\n"
                        (last body-res)
@@ -155,13 +155,13 @@
   (let [pattern #"\[\[draws/(.*?)\]\]"
         res (re-find pattern text)]
     (if (empty? res)
-      (str text)
+      text
       (let [diagram-name (first (s/split (last res) "."))
             diagram-file (str (graph/get-logseq-data-path) "/draws/" (last res))
             diagram-content (fs/slurp diagram-file)]
-        (str "{{<diagram name=\"" diagram-name "\" type=\"excalidraw\">}}\n"
+        (str "{{<kroki_diagram name=\"" diagram-name "\" type=\"excalidraw\">}}\n"
              diagram-content "\n"
-             "{{</diagram>}}")))))
+             "{{</kroki_diagram>}}")))))
 
 (defn parse-links
   [text]
@@ -171,7 +171,7 @@
         desc-link-res (re-seq desc-link-pattern text)]
     (if (empty? desc-link-res)
       (if (empty? link-res)
-        (str text)
+        text
         (reduce
          #(let [current-text (first %2)
                 current-link (last %2)
@@ -199,7 +199,7 @@
   (let [pattern #"{{namespace\s([^}]+)}}"
         res (re-find pattern text)]
     (if (empty? res)
-      (str text)
+      text
       (let [namespace-name (last res)
             data (graph/get-namespace-pages namespace-name)]
         (if (seq data)
@@ -212,41 +212,52 @@
                          (str (apply str (concat (repeat (* (- level 1) 1) "\t"))) "+ "))
                 content (reduce #(str %1 prefix "[" %2 "]({{< ref \"/pages/" (fs/->filename %2) "\" >}})\n") "" data)]
             (str heading content))
-          (str text))))))
+          text)))))
 
 ;; TODO parse-embeds
 (defn parse-embeds
   [text]
-  (str text))
+  text)
 
 (defn parse-video
   [text]
   (let [pattern #"{{(?:video|youtube) (.*?)}}"
         res (re-find pattern text)]
     (if (empty? res)
-      (str text)
+      text
       (let [title-pattern #"(youtu(?:.*\/v\/|.*v\=|\.be\/))([A-Za-z0-9_\-]{11})"
             title (re-find title-pattern text)]
         (if (empty? title)
-          (str text)
+          text
           (str "{{< youtube " (last title) " >}}"))))))
 
 ;; TODO parse-markers
 (defn parse-markers
   [text]
-  (str text))
+  text)
 
 (defn parse-highlights
   [text]
   (let [pattern #"(==(.*?)==)"]
     (s/replace text pattern "{{< logseq/mark >}}$2{{< / logseq/mark >}}")))
 
+(defn- parse-queries
+  [text]
+  (let [pattern #"query-table:: (.*)"
+        res (re-find pattern text)]
+    (if (empty? res)
+      text
+      (let [qery-text (utils/trim-newlines (s/replace text (nth res 0) ""))]
+        (println "Query found")
+        (println qery-text)
+        text))))
+
 (defn parse-org-cmd
   [text]
   (let [pattern #"(?sm)#\+BEGIN_([A-Z]*)[^\n]*\n(.*)#\+END_[^\n]*"
         res (re-find pattern text)]
     (if (empty? res)
-      (str text)
+      text
       (let [cmd (nth res 1)
             value (nth res 2)]
         (str "{{< logseq/org" cmd " >}}" value "{{< / logseq/org" cmd " >}}\n")))))
@@ -256,7 +267,7 @@
   (let [pattern #"(?s)(:LOGBOOK:.*:END:)"
         res (re-find pattern text)]
     (if (empty? res)
-      (str text)
+      text
       (str ""))))
 
 (defn rm-page-properties
@@ -264,7 +275,7 @@
   (let [pattern #"([A-Za-z0-9_\-]+::.*)"
         res (re-find pattern text)]
     (if (empty? res)
-      (str text)
+      text
       (str (rm-page-properties (s/replace text (first res) ""))))))
 
 (defn rm-width-height
@@ -277,7 +288,7 @@
   (let [pattern #"(?:\[\[|\]\])"
         res (re-find pattern text)]
     (if (or (empty? res) (false? (config/entry :rm-brackets)))
-      (str text)
+      text
       (str (rm-brackets (s/replace text pattern ""))))))
 
 ;; Parse the text of the :block/content and convert it into markdown
@@ -308,6 +319,7 @@
                                               (parse-video)
                                               (parse-markers)
                                               (parse-highlights)
+                                              (parse-queries)
                                               (parse-org-cmd)
                                               (rm-logbook-data)
                                               (rm-page-properties)
