@@ -27,6 +27,7 @@ Options:
   -b, --keep-bullets                                            Keep Outliner Bullets
   -t, --export-tasks                                            Export Logseq Tasks
   -r, --rm-brackets                                             Remove Link Brackets
+  -p, --prerender-diagrams                                      Prerender Diagrams and export images
   -d, --delete-outputdir                                        Delete output directory before exporting data
   -v, --verbose                                                 Verbose Output
   -h, --help

@@ -3,7 +3,9 @@
             [logseq-to-markdown.config :as config]
             [logseq-to-markdown.fs :as fs]
             [logseq-to-markdown.utils :as utils]
-            [logseq-to-markdown.graph :as graph]))
+            [logseq-to-markdown.graph :as graph]
+            [logseq-to-markdown.renderer.echarts :as echarts]
+            [logseq-to-markdown.renderer.kroki :as kroki]))
 
 (defn parse-property-value-list
   [property-value]
@@ -120,20 +122,21 @@
                        "{{<kroki_diagram name=\"code_diagram_" @diagram-code-count "\" type=\"" (:type @diagram-code) "\">}}\n"
                        (last body-res)
                        "{{</kroki_diagram>}}")]
+          ;; (kroki/render-image (last body-res) (:type @diagram-code))
           (swap! diagram-code-count inc 1)
           res-str))
       (do
         (reset! diagram-code {:header-found true :type (last header-res)})
         (str "")))))
 
-(def echart-code (atom {:header-found false}))
+(def echart-code (atom {:header-found false :width 0 :height 0}))
 (def echart-code-count (atom 0))
 
 (defn parse-echart
   [text]
-  (let [header-pattern #"{{renderer :logseq-echarts,(.*?)}}"
+  (let [header-pattern #"{{renderer :logseq-echarts,\s*(.*?)px,\s*(.*?)px}}"
         header-res (re-find header-pattern text)
-        body-pattern #"(?s)```([a-z]*)\n(.*)```"
+        body-pattern #"(?s)```json\n(.*)```"
         body-res (re-find body-pattern text)]
     (if (empty? header-res)
       (if (or (empty? body-res) (false? (:header-found @echart-code)))
@@ -144,10 +147,14 @@
                        "{{<echart_diagram name=\"echart_diagram_" @echart-code-count "\">}}\n"
                        (last body-res)
                        "{{</echart_diagram>}}")]
+          ;; (echarts/render (last body-res) (:width @echart-code) (:height @echart-code))
           (swap! echart-code-count inc 1)
           res-str))
       (do
-        (reset! echart-code {:header-found true})
+        
+        (reset! echart-code {:header-found true
+                             :width (int (nth header-res (- (count header-res) 2)))
+                             :height (int (last header-res))})
         (str "")))))
 
 (defn parse-excalidraw-diagram

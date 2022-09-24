@@ -1,9 +1,16 @@
 {
   "name": "@dom8509/logseq-to-markdown",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Export Logseq Graph to (Hugo) Markdown.",
   "dependencies": {
-    "@dom8509/nbb-logseq": "0.7.134"
+    "@dom8509/nbb-logseq": "0.7.134",
+    "canvas": "^2.10.1",
+    "echarts": "^5.3.3",
+    "http": "^0.0.1-security",
+    "jsdom": "^20.0.0",
+    "json": "^11.0.0",
+    "node-fetch": "^3.2.10",
+    "pako": "^2.0.4"
   },
   "bin": {
     "logseq-to-markdown": "index.mjs"

@@ -21,3 +21,7 @@
   "Trim newlines on the begining and end of the strim"
   [text]
   (s/reverse (s/trim-newline (s/reverse (s/trim-newline text)))))
+
+(defn string-to-json
+  [str]
+  (s/replace (s/replace (s/replace (s/replace str "\n" "") " " "") "'" "\"") #"([A-Za-z0-9]+):" "\"$1\":"))
