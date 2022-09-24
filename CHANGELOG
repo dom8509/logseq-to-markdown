@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleases]
+## [v0.2.0] - 2022-09-24
 ### New Features
 * Added cmd line arg -d to delete the output directory before exporting data
 * Added export of EChart diagrams
