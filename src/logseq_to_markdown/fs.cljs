@@ -55,3 +55,10 @@
         full-file-name (str output-dir "/" (get page-data :filename))]
     (fs/mkdirSync output-dir #js {:recursive true})
     (fs/writeFileSync full-file-name (get page-data :data))))
+
+(defn store-asset
+  [data filename]
+  (let [output-dir-base (config/entry :outputdir)
+        output-dir (str output-dir-base "/assets")
+        full-file-name (str output-dir "/" filename)]
+    (fs/writeFileSync full-file-name data #js {:encoding "utf-8"})))

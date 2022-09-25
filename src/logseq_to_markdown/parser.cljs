@@ -118,13 +118,17 @@
         (do
           (reset! diagram-code {:header-found false :type ""})
           text)
-        (let [res-str (str
-                       "{{<kroki_diagram name=\"code_diagram_" @diagram-code-count "\" type=\"" (:type @diagram-code) "\">}}\n"
-                       (last body-res)
-                       "{{</kroki_diagram>}}")]
-          ;; (kroki/render-image (last body-res) (:type @diagram-code))
-          (swap! diagram-code-count inc 1)
-          res-str))
+        (if (config/entry :prerender-diagrams)
+          (let [diagram-file (str "code_diagram_" @diagram-code-count ".svg")]
+            (kroki/render-image (last body-res) (:type @diagram-code) diagram-file)
+            (swap! diagram-code-count inc 1)
+            (str "{{< svg_image \"/assets/" diagram-file "\" >}}"))
+          (let [res-str (str
+                         "{{<kroki_diagram name=\"code_diagram_" @diagram-code-count "\" type=\"" (:type @diagram-code) "\">}}\n"
+                         (last body-res)
+                         "{{</kroki_diagram>}}")]
+            (swap! diagram-code-count inc 1)
+            res-str)))
       (do
         (reset! diagram-code {:header-found true :type (last header-res)})
         (str "")))))
@@ -143,15 +147,19 @@
         (do
           (reset! echart-code {:header-found false :type ""})
           text)
-        (let [res-str (str
-                       "{{<echart_diagram name=\"echart_diagram_" @echart-code-count "\">}}\n"
-                       (last body-res)
-                       "{{</echart_diagram>}}")]
-          ;; (echarts/render (last body-res) (:width @echart-code) (:height @echart-code))
-          (swap! echart-code-count inc 1)
-          res-str))
+        (if (config/entry :prerender-diagrams)
+          (let [diagram-file (str "echart_diagram_" @echart-code-count ".png")]
+            (echarts/render-image (last body-res) (:width @echart-code) (:height @echart-code) diagram-file)
+            (swap! echart-code-count inc 1)
+            (str "![" diagram-file "](/assets/" diagram-file ")"))
+          (let [res-str (str
+                         "{{<echart_diagram name=\"echart_diagram_" @echart-code-count "\">}}\n"
+                         (last body-res)
+                         "{{</echart_diagram>}}")]
+            (swap! echart-code-count inc 1)
+            res-str)))
       (do
-        
+
         (reset! echart-code {:header-found true
                              :width (int (nth header-res (- (count header-res) 2)))
                              :height (int (last header-res))})
@@ -166,9 +174,13 @@
       (let [diagram-name (first (s/split (last res) "."))
             diagram-file (str (graph/get-logseq-data-path) "/draws/" (last res))
             diagram-content (fs/slurp diagram-file)]
-        (str "{{<kroki_diagram name=\"" diagram-name "\" type=\"excalidraw\">}}\n"
-             diagram-content "\n"
-             "{{</kroki_diagram>}}")))))
+        (if (config/entry :prerender-diagrams)
+          (let [diagram-file (str diagram-name ".svg")]
+            (kroki/render-image diagram-content "excalidraw" diagram-file)
+            (str "{{< svg_image \"/assets/" diagram-file "\" >}}"))
+          (str "{{<kroki_diagram name=\"" diagram-name "\" type=\"excalidraw\">}}\n"
+               diagram-content "\n"
+               "{{</kroki_diagram>}}"))))))
 
 (defn parse-links
   [text]
@@ -255,8 +267,9 @@
     (if (empty? res)
       text
       (let [qery-text (utils/trim-newlines (s/replace text (nth res 0) ""))]
-        (println "Query found")
-        (println qery-text)
+        (when (config/entry :verbose)
+          (println "Query found:")
+          (println qery-text))
         text))))
 
 (defn parse-org-cmd

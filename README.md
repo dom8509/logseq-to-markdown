@@ -52,11 +52,14 @@ See the [open issues](https://github.com/dom8509/logseq-to-markdown/issues) for 
 - Images
 - Excalidraw Diagrams
 - Doc As Code Diagrams
+- EChart Diagrams
 - Namspaces
+- Prerendering Diagrams
 
 ### What is known to _not_ work
 
-- Embedded Blocks -> in progress
+- Embedded Blocks
+- Queries
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
