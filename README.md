@@ -39,6 +39,12 @@ Please refer to the manual page for more information.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
+## Website templates
+
+- 🏡 [hugo-PaperMod](https://github.com/dom8509/hugo-PaperMod) - My modified website template to render the Markdown pages exported by logseq-to-markdown. You can use this to host your personal website with free GitHub pages.
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
 ## Issues
 
 See the [open issues](https://github.com/dom8509/logseq-to-markdown/issues) for a full list of proposed features (and known issues).
