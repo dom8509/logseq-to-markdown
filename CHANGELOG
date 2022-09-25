@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleases]
+## [v0.2.0] - 2022-09-24
 ### New Features
 * Added option -d to delete the output directory before exporting data
 * Added option -p to export diagrams as pre-rendered images
