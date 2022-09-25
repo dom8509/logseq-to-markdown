@@ -1,8 +1,14 @@
 # Changelog
 
+## [v0.3.0] - 2022-09-25
+
+## New Features
+* Added Prerendering of Kroki and EChart diagrams
+
 ## [v0.2.0] - 2022-09-24
 ### New Features
-* Added cmd line arg -d to delete the output directory before exporting data
+* Added option -d to delete the output directory before exporting data
+* Added option -p to export diagrams as pre-rendered images
 * Added export of EChart diagrams
 
 ### Bugfixes

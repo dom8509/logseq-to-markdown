@@ -20,6 +20,8 @@
     :default false]
    ["-r" "--rm-brackets" "Remove Link Brackets"
     :default false]
+   ["-p" "--prerender-diagrams" "Prerender Diagrams and export images"
+    :default false]
    ["-d" "--delete-outputdir" "Delete output directory before exporting data"
     :default false]
    ["-v" "--verbose" "Verbose Output"
