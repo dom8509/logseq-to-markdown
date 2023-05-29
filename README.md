@@ -26,6 +26,7 @@ Options:
   -n, --trim-namespaces                                         Trim Namespace Names
   -b, --keep-bullets                                            Keep Outliner Bullets
   -t, --export-tasks                                            Export Logseq Tasks
+  -a, --export-all                                              Export all Logseq Pages
   -r, --rm-brackets                                             Remove Link Brackets
   -p, --prerender-diagrams                                      Prerender Diagrams and export images
   -d, --delete-outputdir                                        Delete output directory before exporting data

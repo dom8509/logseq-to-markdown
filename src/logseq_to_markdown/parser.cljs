@@ -121,13 +121,13 @@
         (if (config/entry :prerender-diagrams)
           (let [diagram-file (str "code_diagram_" @diagram-code-count ".svg")]
             (kroki/render-image (last body-res) (:type @diagram-code) diagram-file)
-            (swap! diagram-code-count inc 1)
+            (swap! diagram-code-count inc)
             (str "{{< svg_image \"/assets/" diagram-file "\" >}}"))
           (let [res-str (str
                          "{{<kroki_diagram name=\"code_diagram_" @diagram-code-count "\" type=\"" (:type @diagram-code) "\">}}\n"
                          (last body-res)
                          "{{</kroki_diagram>}}")]
-            (swap! diagram-code-count inc 1)
+            (swap! diagram-code-count inc)
             res-str)))
       (do
         (reset! diagram-code {:header-found true :type (last header-res)})
@@ -150,13 +150,13 @@
         (if (config/entry :prerender-diagrams)
           (let [diagram-file (str "echart_diagram_" @echart-code-count ".png")]
             (echarts/render-image (last body-res) (:width @echart-code) (:height @echart-code) diagram-file)
-            (swap! echart-code-count inc 1)
+            (swap! echart-code-count inc)
             (str "![" diagram-file "](/assets/" diagram-file ")"))
           (let [res-str (str
                          "{{<echart_diagram name=\"echart_diagram_" @echart-code-count "\">}}\n"
                          (last body-res)
                          "{{</echart_diagram>}}")]
-            (swap! echart-code-count inc 1)
+            (swap! echart-code-count inc)
             res-str)))
       (do
 

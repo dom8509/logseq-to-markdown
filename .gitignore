@@ -7,3 +7,4 @@ out/
 *.log
 .DS_Store
 .nrepl-port
+content/

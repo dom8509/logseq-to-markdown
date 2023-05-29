@@ -1,5 +1,6 @@
 (ns logseq-to-markdown.graph
   (:require [logseq-to-markdown.fs :as fs]
+            [logseq-to-markdown.config :as config]
             [clojure.string :as s]
             [datascript.transit :as dt]
             [datascript.core :as d]))
@@ -103,6 +104,15 @@
       (map #(get % 0) query-res)
       ())))
 
+(defn get-all-public-and-private-pages
+  [graph-db]
+  (let [query '[:find (pull ?p [*])
+                :where
+                [?p :block/created-at]
+                [?p :block/updated-at]]]
+    (println "In get-all-public-and-private-pages")
+    (d/q query graph-db)))
+
 (defn get-all-public-pages
   [graph-db]
   (let [query '[:find (pull ?p [*])
@@ -110,8 +120,16 @@
                 [?p :block/properties ?pr]
                 [(get ?pr :public) ?t]
                 [(= true ?t)]
-                [?p :block/name ?n]]]
+                [?p :block/created-at]
+                [?p :block/updated-at]]]
+    (println "In get-all-public-pages")
     (d/q query graph-db)))
+
+(defn get-all-pages
+  [graph-db]
+  (if (config/entry :export-all)
+    (get-all-public-and-private-pages graph-db)
+    (get-all-public-pages graph-db)))
 
 (declare get-block-tree)
 

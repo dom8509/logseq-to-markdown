@@ -18,6 +18,8 @@
     :default false]
    ["-t" "--export-tasks" "Export Logseq Tasks"
     :default false]
+   ["-a" "--export-all" "Export all Logseq Pages"
+    :default false]
    ["-r" "--rm-brackets" "Remove Link Brackets"
     :default false]
    ["-p" "--prerender-diagrams" "Prerender Diagrams and export images"
