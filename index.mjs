@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { addClassPath, loadFile, getClassPath } from '@dom8509/nbb-logseq';
+import { addClassPath, loadFile } from '@logseq/nbb-logseq';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 

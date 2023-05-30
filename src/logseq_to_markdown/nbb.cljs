@@ -23,11 +23,11 @@
         (config/set options)
         (fs/setup-outdir)
         (println (str "Exporting data to " (config/entry :outputdir) " ..."))
-        (let [public-pages (map #(get % 0) (graph/get-all-public-pages graph-db))]
-          (graph/determine-logseq-data-path graph-db public-pages)
+        (let [pages (map #(get % 0) (graph/get-all-pages graph-db))]
+          (graph/determine-logseq-data-path graph-db pages)
           (dorun
-           (for [public-page public-pages]
-             (let [page-data (parser/parse-page-blocks graph-db public-page)]
+           (for [page pages]
+             (let [page-data (parser/parse-page-blocks graph-db page)]
                (fs/store-page page-data)))))
         (println "finished!")))))
 
