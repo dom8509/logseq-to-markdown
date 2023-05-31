@@ -29,7 +29,7 @@
               pages (map #(get % 0) page-map)]
           (println "Page Map:")
           (println page-map)
-          (graph/determine-logseq-data-path graph-db pages)
+          ;; (graph/determine-logseq-data-path graph-db pages)
           (dorun
            (for [page pages]
              (let [page-data (parser/parse-page-blocks graph-db page)]
