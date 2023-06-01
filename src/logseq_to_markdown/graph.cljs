@@ -25,22 +25,13 @@
         (get-graph-paths)))
 
 (defn determine-logseq-data-path
-  ;; if data path is unknown get path 
-  ;; from current block and store as atom
-  [graph-db public-pages]
-  (when (and (empty? @logseq-data-path) (not-empty public-pages))
-    (let [block (first public-pages)
-          block-id (get block :db/id)
-          query '[:find ?n
-                  :in $ ?block-id
-                  :where
-                  [?block-id :block/file ?f]
-                  [?f :file/path ?n]]
-          query-res (d/q query graph-db block-id)
-          logseq-filename (first (map #(get % 0) query-res))
-          logseq-filename-tokens (s/split logseq-filename "/")
-          logseq-file-path (s/join "/" (subvec logseq-filename-tokens 0 (- (count logseq-filename-tokens) 2)))]
-      (reset! logseq-data-path logseq-file-path))))
+  [graph]
+  (let [logseq-graph-file (get-graph-path graph)
+        logseq-graph-path (s/replace (s/replace (s/replace logseq-graph-file #"^.*logseq_local_" "") #".transit$" "") "++" "/")]
+    (println "graph: " graph)
+    (println "logseq-graph-file: " logseq-graph-file)
+    (println "logseq-graph-path: " logseq-graph-path)
+    (reset! logseq-data-path logseq-graph-path)))
 
 (defn get-logseq-data-path
   []

@@ -15,7 +15,7 @@
 (defn -main
   [args]
   (let [{:keys [graph-name options exit-message]} (args/validate-args args)]
-    (println "Running logseq-to-markdown version 0.4.1")
+    (println "Running logseq-to-markdown version 0.4.1-build202306011430")
     (println "args: " args)
     (if exit-message
       (exit exit-message)
@@ -27,9 +27,7 @@
         (println (str "Exporting data to " (config/entry :outputdir) " ..."))
         (let [page-map (graph/get-all-pages graph-db)
               pages (map #(get % 0) page-map)]
-          (println "Page Map:")
-          (println page-map)
-          ;; (graph/determine-logseq-data-path graph-db pages)
+          (graph/determine-logseq-data-path graph-name)
           (dorun
            (for [page pages]
              (let [page-data (parser/parse-page-blocks graph-db page)]
