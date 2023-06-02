@@ -26,6 +26,9 @@
     :default false]
    ["-d" "--delete-outputdir" "Delete output directory before exporting data"
     :default false]
+   [nil "--time-pattern" "Template Pattern for Time Strings"
+    :default "yyyy-MM-dd"
+    :required "PATTERN"]
    ["-v" "--verbose" "Verbose Output"
     :default false]
    ["-h" "--help"]])

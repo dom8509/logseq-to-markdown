@@ -62,3 +62,9 @@
         output-dir (str output-dir-base "/assets")
         full-file-name (str output-dir "/" filename)]
     (fs/writeFileSync full-file-name data #js {:encoding "utf-8"})))
+
+(defn copy-file->try
+  [src dst]
+  (if (exists? src)
+    (fs/copy-file src dst)
+    (println "Warning: Could not find file " src " in graph folder!")))
