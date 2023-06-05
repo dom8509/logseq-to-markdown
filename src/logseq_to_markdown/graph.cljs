@@ -28,9 +28,6 @@
   [graph]
   (let [logseq-graph-file (get-graph-path graph)
         logseq-graph-path (s/replace (s/replace (s/replace logseq-graph-file #"^.*logseq_local_" "") #".transit$" "") "++" "/")]
-    (println "graph: " graph)
-    (println "logseq-graph-file: " logseq-graph-file)
-    (println "logseq-graph-path: " logseq-graph-path)
     (reset! logseq-data-path logseq-graph-path)))
 
 (defn get-logseq-data-path
@@ -101,7 +98,6 @@
                 :where
                 [?p :block/created-at]
                 [?p :block/updated-at]]]
-    (println "In get-all-public-and-private-pages")
     (d/q query graph-db)))
 
 (defn get-all-public-pages
@@ -113,7 +109,6 @@
                 [(= true ?t)]
                 [?p :block/created-at]
                 [?p :block/updated-at]]]
-    (println "In get-all-public-pages")
     (d/q query graph-db)))
 
 (defn get-all-pages

@@ -1,6 +1,14 @@
 # Changelog
 
-## [v0.4.0] - 2022-09-24
+## [v0.4.1] - 2022-06-05
+### New Features
+* Added option --time-pattern to specify a template pattern for time strings
+
+### Bugfixes
+* Fixed logseq graph path determination
+* wrapped copy-file to print a warning instead of throwing an error
+
+## [v0.4.0] - 2023-05-30
 ### New Features
 * Added option -a to export all pages
 

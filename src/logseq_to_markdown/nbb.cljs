@@ -15,7 +15,7 @@
 (defn -main
   [args]
   (let [{:keys [graph-name options exit-message]} (args/validate-args args)]
-    (println "Running logseq-to-markdown version 0.4.1-build202306011430")
+    (println "Running logseq-to-markdown version 0.4.1")
     (println "args: " args)
     (if exit-message
       (exit exit-message)
