@@ -43,8 +43,8 @@
         properties (into {} (filter #(not (contains? excluded-properties (first %))) (get page :block/properties)))
         tags (get properties :tags)
         categories (get properties :categories)
-        created-at (utils/->hugo-date (get page :block/created-at))
-        updated-at (utils/->hugo-date (get page :block/updated-at))
+        created-at (utils/->hugo-date (get page :block/created-at) (config/entry :time-pattern))
+        updated-at (utils/->hugo-date (get page :block/updated-at) (config/entry :time-pattern))
         page-data (s/join ""
                           ["---\n"
                            (str "title: " title "\n")
@@ -98,7 +98,7 @@
             converted-text (s/replace text #"\.\.\/" "/")]
         (if (not (or (s/includes? link "http") (s/includes? link "pdf")))
           (do
-            (fs/copy-file
+            (fs/copy-file->try
              (str (graph/get-logseq-data-path) converted-link)
              (str (config/entry :outputdir) converted-link))
             (str converted-text))

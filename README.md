@@ -30,6 +30,7 @@ Options:
   -r, --rm-brackets                                             Remove Link Brackets
   -p, --prerender-diagrams                                      Prerender Diagrams and export images
   -d, --delete-outputdir                                        Delete output directory before exporting data
+      --time-pattern PATTERN               yyyy-MM-dd           Template Pattern for Time Strings
   -v, --verbose                                                 Verbose Output
   -h, --help
 
