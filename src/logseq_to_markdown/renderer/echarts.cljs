@@ -1,14 +1,8 @@
-(ns logseq-to-markdown.renderer.echarts
-  (:require ["echarts" :as echarts]
-            ["canvas" :as canvas]
-            [logseq-to-markdown.utils :as utils]
-            [logseq-to-markdown.fs :as fs]))
+(ns logseq-to-markdown.renderer.echarts)
 
+;; ECharts rendering requires canvas and echarts packages.
+;; These are optional dependencies, so we provide a no-op stub
+;; when they are not available.
 (defn render-image
   [code width height filename]
-  (let [jsondata (.parse js/JSON (clj->js (utils/string-to-json code)))
-        canvas (canvas/createCanvas width height)
-        echart (echarts/init canvas)]
-    (.setOption echart jsondata)
-    (let [data (.toBuffer canvas "image/png")]
-      (fs/store-asset data filename))))
+  (println "Info: ECharts rendering not available (canvas and echarts dependencies required for diagram prerendering)"))

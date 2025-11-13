@@ -7,6 +7,18 @@
             [logseq-to-markdown.renderer.echarts :as echarts]
             [logseq-to-markdown.renderer.kroki :as kroki]))
 
+(defn extract-inline-tags
+  "Extract all inline tags from text. Returns a vector of tag names.
+   Matches patterns like #[[tag-name]] and #tagname"
+  [text]
+  (let [link-pattern #"(?:#\[\[(.*?)\]\])|(?<!#)#(\w+)"
+        matches (re-seq link-pattern text)]
+    (reduce (fn [tags match]
+              (let [tag (or (second match) (nth match 2))]
+                (if tag (conj tags tag) tags)))
+            []
+            matches)))
+
 (defn parse-property-value-list
   [property-value]
   (let [string-value? (string? property-value)
@@ -31,44 +43,52 @@
     (str value-lines)))
 
 (defn parse-meta-data
-  [page]
-  (let [original-name (get page :block/original-name)
-        trim-namespaces? (config/entry :trim-namespaces)
-        namespace? (s/includes? original-name "/")
-        namespace (let [tokens (s/split original-name "/")]
-                    (s/join "/" (subvec tokens 0 (- (count tokens) 1))))
-        title (or (and trim-namespaces? namespace? (last (s/split original-name "/"))) original-name)
-        file (str (fs/->filename (or (and namespace? (last (s/split original-name "/"))) original-name)) ".md")
-        excluded-properties (config/entry :excluded-properties)
-        properties (into {} (filter #(not (contains? excluded-properties (first %))) (get page :block/properties)))
-        tags (get properties :tags)
-        categories (get properties :categories)
-        created-at (utils/->hugo-date (get page :block/created-at) (config/entry :time-pattern))
-        updated-at (utils/->hugo-date (get page :block/updated-at) (config/entry :time-pattern))
-        page-data (s/join ""
-                          ["---\n"
-                           (str "title: " title "\n")
-                           (when namespace? (str "namespace: " namespace "\n"))
-                           (str "tags: " (parse-property-value-list tags) "\n")
-                           (str "categories: " (parse-property-value-list categories) "\n")
-                           (str "date: " created-at "\n")
-                           (str "lastMod: " updated-at "\n")
-                           "---\n"])]
-    (when (config/entry :verbose)
-      (println "======================================")
-      (println (str "Title: " title))
-      (println (str "Namespace?: " namespace?))
-      (println (str "Namespace: " namespace))
-      (println (str "File: " file))
-      (println (str "Excluded Properties: " excluded-properties))
-      (println (str "Properties: " properties))
-      (println (str "Tags: " tags))
-      (println (str "Categories: " categories))
-      (println (str "Created at: " created-at))
-      (println (str "Updated at: " updated-at)))
-    {:filename file
-     :namespace namespace
-     :data page-data}))
+  ([page]
+   (parse-meta-data page []))
+  ([page inline-tags]
+   (let [original-name (get page :block/original-name)
+         trim-namespaces? (config/entry :trim-namespaces)
+         namespace? (s/includes? original-name "/")
+         namespace (let [tokens (s/split original-name "/")]
+                     (s/join "/" (subvec tokens 0 (- (count tokens) 1))))
+         title (or (and trim-namespaces? namespace? (last (s/split original-name "/"))) original-name)
+         file (str (fs/->filename (or (and namespace? (last (s/split original-name "/"))) original-name)) ".md")
+         excluded-properties (config/entry :excluded-properties)
+         properties (into {} (filter #(not (contains? excluded-properties (first %))) (get page :block/properties)))
+         tags (get properties :tags)
+         categories (get properties :categories)
+         ;; Merge inline tags with property tags, removing duplicates
+         merged-tags (if (and (seq inline-tags) (not (nil? tags)))
+                       (distinct (concat (if (vector? tags) tags [tags]) inline-tags))
+                       (or (and (seq inline-tags) inline-tags) tags))
+         created-at (utils/->hugo-date (get page :block/created-at) (config/entry :time-pattern))
+         updated-at (utils/->hugo-date (get page :block/updated-at) (config/entry :time-pattern))
+         page-data (s/join ""
+                           ["---\n"
+                            (str "title: " title "\n")
+                            (when namespace? (str "namespace: " namespace "\n"))
+                            (str "tags: " (parse-property-value-list merged-tags) "\n")
+                            (str "categories: " (parse-property-value-list categories) "\n")
+                            (str "date: " created-at "\n")
+                            (str "lastMod: " updated-at "\n")
+                            "---\n"])]
+     (when (config/entry :verbose)
+       (println "======================================")
+       (println (str "Title: " title))
+       (println (str "Namespace?: " namespace?))
+       (println (str "Namespace: " namespace))
+       (println (str "File: " file))
+       (println (str "Excluded Properties: " excluded-properties))
+       (println (str "Properties: " properties))
+       (println (str "Tags: " tags))
+       (println (str "Inline Tags: " inline-tags))
+       (println (str "Merged Tags: " merged-tags))
+       (println (str "Categories: " categories))
+       (println (str "Created at: " created-at))
+       (println (str "Updated at: " updated-at)))
+     {:filename file
+      :namespace namespace
+      :data page-data})))
 
 (defn parse-block-refs
   [text]
@@ -349,21 +369,37 @@
             (when (not= res-line "")
               (str res-line "\n\n"))))))))
 
-;; Iterate over every block and parse the :block/content
+;; Helper function to parse block content while collecting inline tags
+(defn parse-block-content-with-tags
+  [block-tree collected-tags]
+  (if (empty? block-tree)
+    ["" collected-tags]
+    (let [current-block (first block-tree)
+          block-content (get-in current-block [:data :block/content])
+          parsed-text (parse-text current-block)
+          ;; Extract inline tags from the block content
+          block-tags (if block-content (extract-inline-tags block-content) [])
+          updated-tags (concat collected-tags block-tags)
+          [children-text children-tags] (parse-block-content-with-tags (get current-block :children) updated-tags)
+          [rest-text rest-tags] (parse-block-content-with-tags (rest block-tree) children-tags)
+          combined-text (str parsed-text children-text rest-text)]
+      [combined-text rest-tags])))
+
+;; Iterate over every block and parse the :block/content, collecting inline tags
 (defn parse-block-content
-  [block-tree]
-  (when (not-empty block-tree)
-    (let [current-block (first block-tree)]
-      (str (parse-text current-block)
-           (parse-block-content (get current-block :children))
-           (parse-block-content (rest block-tree))))))
+  ([block-tree]
+   (first (parse-block-content-with-tags block-tree [])))
+  ([block-tree inline-tags]
+   (first (parse-block-content-with-tags block-tree inline-tags))))
 
 (defn parse-page-blocks
   [graph-db page]
-  (let [meta-data (parse-meta-data page)
-        first-block-id (get page :db/id)
+  (let [first-block-id (get page :db/id)
         block-tree (graph/get-block-tree graph-db first-block-id first-block-id 1)
-        content-data (parse-block-content block-tree)
+        ;; Parse content and collect inline tags
+        [content-data inline-tags] (parse-block-content-with-tags block-tree [])
+        ;; Generate metadata with inline tags merged in
+        meta-data (parse-meta-data page inline-tags)
         page-data (str
                    (get meta-data :data)
                    content-data)]
