@@ -46,13 +46,16 @@
   ([page]
    (parse-meta-data page []))
   ([page inline-tags]
-   (let [original-name (get page :block/original-name)
+   (let [original-name (or (get page :block/original-name) "")
          trim-namespaces? (config/entry :trim-namespaces)
          namespace? (s/includes? original-name "/")
          namespace (let [tokens (s/split original-name "/")]
                      (s/join "/" (subvec tokens 0 (- (count tokens) 1))))
          title (or (and trim-namespaces? namespace? (last (s/split original-name "/"))) original-name)
-         file (str (fs/->filename (or (and namespace? (last (s/split original-name "/"))) original-name)) ".md")
+         base-name (fs/->filename (or (and namespace? (last (s/split original-name "/"))) original-name))
+         ;; Avoid Hugo reserved filenames that have special meaning in content directories
+         safe-name (if (#{"index" "_index"} base-name) (str base-name "_page") base-name)
+         file (str safe-name ".md")
          excluded-properties (config/entry :excluded-properties)
          properties (into {} (filter #(not (contains? excluded-properties (first %))) (get page :block/properties)))
          tags (get properties :tags)
@@ -65,7 +68,7 @@
          updated-at (utils/->hugo-date (get page :block/updated-at) (config/entry :time-pattern))
          page-data (s/join ""
                            ["---\n"
-                            (str "title: " title "\n")
+                            (str "title: \"" (s/replace title "\"" "\\\"") "\"\n")
                             (when namespace? (str "namespace: " namespace "\n"))
                             (str "tags: " (parse-property-value-list merged-tags) "\n")
                             (str "categories: " (parse-property-value-list categories) "\n")
@@ -207,23 +210,11 @@
     (let [link-pattern #"(?:#\[\[(.*?)\]\])|(?<!#)#(\w+)"
         link-res (re-seq link-pattern text)
         desc-link-pattern #"\[(.*?)\]\(\[\[(.*?)\]\]\)"
-        desc-link-res (re-seq desc-link-pattern text)]
-    (if (empty? desc-link-res)
-      (if (empty? link-res)
-        text
-        (reduce
-         #(let [current-text (first %2)
-                current-link (or (second %2) (nth %2 2)) ; adjusted to account for either match in the two patterns
-                namespace-pattern #"\[\[([^\/]*\/).*\]\]"
-                namespace-res (re-find namespace-pattern text)
-                namespace-link? (not-empty namespace-res)
-                link-text (or (and namespace-link? (config/entry :trim-namespaces)
-                                   (last (s/split current-link "/"))) current-link)
-                replaced-str (or (and (graph/page-exists? current-link) (str "#[" link-text "]({{< ref \"/pages/" (fs/->filename current-link) "\" >}})"))
-                                 (str "#" link-text))]
-            (s/replace %1 current-text replaced-str))
-         text
-         link-res))
+        desc-link-res (re-seq desc-link-pattern text)
+        ;; Plain [[Page Name]] links (not preceded by #)
+        plain-link-pattern #"(?<!#)\[\[(.*?)\]\]"
+        plain-link-res (re-seq plain-link-pattern text)]
+    (if (not (empty? desc-link-res))
       (reduce #(let [current-text (first %2)
                      current-link (last %2)
                      link-text (nth %2 1)
@@ -231,7 +222,35 @@
                                       (str link-text))]
                  (s/replace %1 current-text replaced-str))
               text
-              desc-link-res))))
+              desc-link-res)
+      (let [;; First, convert #[[Page]] and #tag links
+            text-after-hash-links
+            (if (empty? link-res)
+              text
+              (reduce
+               #(let [current-text (first %2)
+                      current-link (or (second %2) (nth %2 2))
+                      namespace-pattern #"\[\[([^\/]*\/).*\]\]"
+                      namespace-res (re-find namespace-pattern text)
+                      namespace-link? (not-empty namespace-res)
+                      link-text (or (and namespace-link? (config/entry :trim-namespaces)
+                                         (last (s/split current-link "/"))) current-link)
+                      replaced-str (or (and (graph/page-exists? current-link) (str "#[" link-text "]({{< ref \"/pages/" (fs/->filename current-link) "\" >}})"))
+                                       (str "#" link-text))]
+                  (s/replace %1 current-text replaced-str))
+               text
+               link-res))]
+        ;; Then, convert remaining plain [[Page]] links
+        (if (empty? plain-link-res)
+          text-after-hash-links
+          (reduce
+           #(let [current-text (first %2)
+                  current-link (second %2)
+                  replaced-str (or (and (graph/page-exists? current-link) (str "[" current-link "]({{< ref \"/pages/" (fs/->filename current-link) "\" >}})"))
+                                   current-link)]
+              (s/replace %1 current-text replaced-str))
+           text-after-hash-links
+           plain-link-res))))))
 
 (defn parse-namespaces
   [level text]
