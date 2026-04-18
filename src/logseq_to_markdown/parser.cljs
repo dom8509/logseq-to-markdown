@@ -425,3 +425,39 @@
     {:filename (get meta-data :filename)
      :namespace (get meta-data :namespace)
      :data page-data}))
+
+(defn- filter-public-blocks
+  "Walk a block tree and keep only nodes whose :db/id is in
+   `public-ids`, plus all their descendants (children are implicitly
+   public)."
+  [block-tree public-ids]
+  (reduce
+   (fn [acc node]
+     (if (contains? public-ids (get-in node [:data :db/id]))
+       ;; Public block – keep it with all its children intact
+       (conj acc node)
+       ;; Not public itself – but check children for public blocks
+       (let [filtered-children (filter-public-blocks (:children node) public-ids)]
+         (if (seq filtered-children)
+           ;; Some descendants are public; splice them in at this level
+           (into acc filtered-children)
+           acc))))
+   []
+   block-tree))
+
+(defn parse-public-blocks-for-page
+  "Like parse-page-blocks but only renders blocks that are individually
+   marked public:: true (and their children)."
+  [graph-db page]
+  (let [first-block-id (get page :db/id)
+        block-tree (graph/get-block-tree graph-db first-block-id first-block-id 1)
+        public-ids (graph/get-public-block-ids graph-db first-block-id)
+        filtered-tree (filter-public-blocks block-tree public-ids)
+        [content-data inline-tags] (parse-block-content-with-tags filtered-tree [])
+        meta-data (parse-meta-data page inline-tags)
+        page-data (str
+                   (get meta-data :data)
+                   content-data)]
+    {:filename (get meta-data :filename)
+     :namespace (get meta-data :namespace)
+     :data page-data}))
