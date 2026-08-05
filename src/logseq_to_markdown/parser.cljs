@@ -19,6 +19,18 @@
             []
             matches)))
 
+(defn property-tags
+  "Tags declared with a `tags::` property, as a seq of tag names. Logseq
+   stores the value as a set, a vector or a bare string depending on how
+   many tags were written, so normalise all of them to a seq."
+  [properties]
+  (let [tags (get properties :tags)]
+    (cond
+      (nil? tags) []
+      (string? tags) [tags]
+      (coll? tags) (vec tags)
+      :else [(str tags)])))
+
 (defn parse-property-value-list
   [property-value]
   (let [string-value? (string? property-value)
@@ -79,10 +91,9 @@
          properties (into {} (filter #(not (contains? excluded-properties (first %))) (get page :block/properties)))
          tags (get properties :tags)
          categories (get properties :categories)
-         ;; Merge inline tags with property tags, removing duplicates
-         merged-tags (if (and (seq inline-tags) (not (nil? tags)))
-                       (distinct (concat (if (vector? tags) tags [tags]) inline-tags))
-                       (or (and (seq inline-tags) inline-tags) tags))
+         ;; Merge page property tags with the tags collected from the blocks,
+         ;; removing duplicates
+         merged-tags (seq (distinct (concat (property-tags properties) inline-tags)))
          created-at (utils/->hugo-date (get page :block/created-at) (config/entry :time-pattern))
          updated-at (utils/->hugo-date (get page :block/updated-at) (config/entry :time-pattern))
          ;; Pass through any other page properties as YAML frontmatter lines.
@@ -493,7 +504,7 @@
             (when (not= res-line "")
               (str res-line "\n\n"))))))))
 
-;; Helper function to parse block content while collecting inline tags
+;; Helper function to parse block content while collecting block tags
 (defn parse-block-content-with-tags
   [block-tree collected-tags]
   (if (empty? block-tree)
@@ -501,8 +512,14 @@
     (let [current-block (first block-tree)
           block-content (get-in current-block [:data :block/content])
           parsed-text (parse-text current-block)
-          ;; Extract inline tags from the block content
-          block-tags (if block-content (extract-inline-tags block-content) [])
+          ;; Extract inline tags from the block content, plus the ones the
+          ;; block declares with a `tags::` property. The pre-block carries the
+          ;; page properties, which parse-meta-data already reads off the page.
+          inline (if block-content (extract-inline-tags block-content) [])
+          declared (if (get-in current-block [:data :block/pre-block?])
+                     []
+                     (property-tags (get-in current-block [:data :block/properties])))
+          block-tags (concat inline declared)
           updated-tags (concat collected-tags block-tags)
           [children-text children-tags] (parse-block-content-with-tags (get current-block :children) updated-tags)
           [rest-text rest-tags] (parse-block-content-with-tags (rest block-tree) children-tags)
