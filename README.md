@@ -30,6 +30,7 @@ Options:
   -r, --rm-brackets                                             Remove Link Brackets
   -p, --prerender-diagrams                                      Prerender Diagrams and export images
   -d, --delete-outputdir                                        Delete output directory before exporting data
+      --title-max-length LENGTH            70                   Maximum length of a title derived from a journal page's first block
       --time-pattern PATTERN               yyyy-MM-dd           Template Pattern for Time Strings
   -v, --verbose                                                 Verbose Output
   -h, --help
@@ -63,6 +64,10 @@ See the [open issues](https://github.com/dom8509/logseq-to-markdown/issues) for 
 - EChart Diagrams
 - Namspaces
 - Prerendering Diagrams
+- Journal Titles (a journal page is titled after its first block instead of its
+  date; the text is stripped of markup and cut at a sentence or word boundary
+  once it exceeds `--title-max-length`. The block stays in the page body unless
+  the title reproduces it in full.)
 
 ### What is known to _not_ work
 

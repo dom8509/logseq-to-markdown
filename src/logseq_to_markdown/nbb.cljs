@@ -31,7 +31,17 @@
           (dorun
            (for [page pages]
              (let [page-data (parser/parse-page-blocks graph-db page)]
-               (fs/store-page page-data)))))
+               (fs/store-page page-data))))
+          ;; Second pass: pages that aren't public but contain public blocks
+          (when-not (config/entry :export-all)
+            (let [pb-page-map (graph/get-pages-with-public-blocks graph-db)
+                  pb-pages (map #(get % 0) pb-page-map)]
+              (when (config/entry :verbose)
+                (println (str "Found " (count pb-pages) " page(s) with public blocks.")))
+              (dorun
+               (for [page pb-pages]
+                 (let [page-data (parser/parse-public-blocks-for-page graph-db page)]
+                   (fs/store-page page-data)))))))
         (println "finished!")))))
 
 (when (= nbb/*file* (:file (meta #'-main)))

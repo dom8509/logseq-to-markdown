@@ -117,6 +117,38 @@
     (get-all-public-and-private-pages graph-db)
     (get-all-public-pages graph-db)))
 
+(defn get-pages-with-public-blocks
+  "Find pages that are NOT themselves public but contain at least one
+   block with public:: true.  Returns page entities (pull ?page [*])."
+  [graph-db]
+  (let [query '[:find (pull ?page [*])
+                :where
+                [?b :block/page ?page]
+                [?b :block/properties ?bpr]
+                [(get ?bpr :public) ?bt]
+                [(= true ?bt)]
+                [?page :block/created-at]
+                [?page :block/updated-at]
+                (not-join [?page]
+                          [?page :block/properties ?ppr]
+                          [(get ?ppr :public) ?pt]
+                          [(= true ?pt)])]]
+    (d/q query graph-db)))
+
+(defn get-public-block-ids
+  "Return the set of :db/id values for blocks on `page-id` that have
+   public:: true."
+  [graph-db page-id]
+  (let [query '[:find ?b
+                :in $ ?page
+                :where
+                [?b :block/page ?page]
+                [?b :block/properties ?pr]
+                [(get ?pr :public) ?t]
+                [(= true ?t)]]
+        res (d/q query graph-db page-id)]
+    (into #{} (map first res))))
+
 (declare get-block-tree)
 
 (defn get-child-blocks

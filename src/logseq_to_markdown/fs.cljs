@@ -66,5 +66,5 @@
 (defn copy-file->try
   [src dst]
   (if (exists? src)
-    (fs/copy-file src dst)
+    (copy-file src dst)
     (println "Warning: Could not find file " src " in graph folder!")))
