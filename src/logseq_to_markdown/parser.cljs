@@ -42,16 +42,35 @@
                       (str property-value)))]
     (str value-lines)))
 
+(defn parse-property-yaml
+  "Format a Logseq property value for a YAML frontmatter line.
+   Strings become a double-quoted scalar (multi-line strings become a `|` block).
+   Sequentials reuse the list formatter. Anything else is stringified."
+  [value]
+  (cond
+    (string? value)
+    (if (s/includes? value "\n")
+      (str "|\n  " (s/replace value "\n" "\n  "))
+      (str "\""
+           (-> value (s/replace "\\" "\\\\") (s/replace "\"" "\\\""))
+           "\""))
+    (sequential? value) (parse-property-value-list value)
+    :else (str value)))
+
 (defn parse-meta-data
   ([page]
-   (parse-meta-data page []))
+   (parse-meta-data page [] nil))
   ([page inline-tags]
+   (parse-meta-data page inline-tags nil))
+  ([page inline-tags title-override]
    (let [original-name (or (get page :block/original-name) "")
          trim-namespaces? (config/entry :trim-namespaces)
          namespace? (s/includes? original-name "/")
          namespace (let [tokens (s/split original-name "/")]
                      (s/join "/" (subvec tokens 0 (- (count tokens) 1))))
-         title (or (and trim-namespaces? namespace? (last (s/split original-name "/"))) original-name)
+         title (or title-override
+                   (and trim-namespaces? namespace? (last (s/split original-name "/")))
+                   original-name)
          base-name (fs/->filename (or (and namespace? (last (s/split original-name "/"))) original-name))
          ;; Avoid Hugo reserved filenames that have special meaning in content directories
          safe-name (if (#{"index" "_index"} base-name) (str base-name "_page") base-name)
@@ -66,6 +85,11 @@
                        (or (and (seq inline-tags) inline-tags) tags))
          created-at (utils/->hugo-date (get page :block/created-at) (config/entry :time-pattern))
          updated-at (utils/->hugo-date (get page :block/updated-at) (config/entry :time-pattern))
+         ;; Pass through any other page properties as YAML frontmatter lines.
+         ;; Skip the ones we've already rendered above so we don't double-emit.
+         extra-props (apply dissoc properties [:tags :categories :title :namespace :date :lastMod])
+         extra-lines (s/join "" (for [[k v] extra-props]
+                                  (str (name k) ": " (parse-property-yaml v) "\n")))
          page-data (s/join ""
                            ["---\n"
                             (str "title: \"" (s/replace title "\"" "\\\"") "\"\n")
@@ -74,6 +98,7 @@
                             (str "categories: " (parse-property-value-list categories) "\n")
                             (str "date: " created-at "\n")
                             (str "lastMod: " updated-at "\n")
+                            extra-lines
                             "---\n"])]
      (when (config/entry :verbose)
        (println "======================================")
@@ -350,12 +375,92 @@
       text
       (str (rm-brackets (s/replace text pattern ""))))))
 
+(def ^:private default-title-max-length 70)
+
+(defn- strip-markup
+  "Reduce Logseq/markdown markup on a single line to the words a reader sees."
+  [text]
+  (-> text
+      ;; leading heading, quote and list markers carry no title text
+      (s/replace #"^\s*(?:>|[-*+]|#{1,6})\s+" "")
+      ;; images have no readable text, links keep their label only
+      (s/replace #"!\[[^\]]*\]\([^)]*\)" " ")
+      (s/replace #"\[([^\]]*)\]\([^)]*\)" "$1")
+      ;; block refs, renderers and macros
+      (s/replace #"\(\([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\)\)" " ")
+      (s/replace #"\{\{[^}]*\}\}" " ")
+      (s/replace #"https?://\S+" " ")
+      ;; tags trailing the sentence are metadata, not part of it
+      (s/replace #"(?:\s*(?:#\[\[[^\]]*\]\]|#[^\s#]+))+\s*$" "")
+      ;; tags left inside the sentence read as ordinary words
+      (s/replace #"#\[\[([^\]]*)\]\]" "$1")
+      (s/replace #"(?<![\w#])#([^\s#\[\]()]+)" "$1")
+      ;; page links and emphasis
+      (s/replace #"\[\[([^\]]*)\]\]" "$1")
+      (s/replace #"==([^=]*)==" "$1")
+      (s/replace #"\*\*([^*]*)\*\*" "$1")
+      (s/replace #"\*([^*]*)\*" "$1")
+      (s/replace #"`([^`]*)`" "$1")))
+
+(defn- normalize-spacing
+  [text]
+  (-> text (s/replace #"\s+" " ") s/trim (s/replace #"[\s.:;,\-–—]+$" "")))
+
+(defn- truncate-title
+  "Cut `text` down to `max-len`, preferring a sentence boundary and falling
+   back to the last word boundary. Returns [text truncated?]."
+  [text max-len]
+  (if (<= (count text) max-len)
+    [text false]
+    (let [head (str (subs text 0 max-len) " ")
+          sentence (second (re-find #"^(.{20,}?[.!?])\s" head))]
+      (if sentence
+        [(s/replace sentence #"\.$" "") true]
+        (let [cut (subs text 0 (dec max-len))
+              last-space (s/last-index-of cut " ")
+              base (if (and last-space (> last-space (quot max-len 2)))
+                     (subs cut 0 last-space)
+                     cut)]
+          [(str (normalize-spacing base) "…") true])))))
+
+(defn derive-title
+  "Derive a page title from the content of a block. Returns a map with the
+   `:text` and whether the title reproduces the block in full (`:lossless?`),
+   or nil when the block has no usable text (e.g. an image-only block)."
+  [content]
+  (let [plain (-> (str content) rm-logbook-data rm-page-properties)
+        line (->> (s/split-lines plain) (remove s/blank?) first)
+        cleaned (some-> line strip-markup normalize-spacing)]
+    (when-not (s/blank? cleaned)
+      (let [[text truncated?] (truncate-title cleaned (or (config/entry :title-max-length)
+                                                          default-title-max-length))]
+        {:text text
+         :lossless? (and (not truncated?)
+                         (= text (normalize-spacing plain)))}))))
+
+(defn apply-bullet-prefix
+  "Prepend `prefix` (e.g. \"\\t+ \") to the first line and a matching
+   continuation indent (\"\\t  \") to subsequent lines. Without this,
+   multi-line block content like fenced code blocks gets dropped to
+   column 0 and breaks out of the list-item context, leaving the
+   markdown unparseable by Goldmark/CommonMark."
+  [prefix text]
+  (if-not (s/includes? text "\n")
+    (str prefix text)
+    (let [continuation (s/replace prefix #"\+ $" "  ")
+          lines (s/split-lines text)]
+      (->> (rest lines)
+           (map #(if (s/blank? %) % (str continuation %)))
+           (cons (str prefix (first lines)))
+           (s/join "\n")))))
+
 ;; Parse the text of the :block/content and convert it into markdown
 (defn parse-text
   [block]
   (let [current-block-data (:data block)
         block-level (:level block)]
-    (when (not (and (:block/pre-block? current-block-data) (= block-level 1)))
+    (when (not (or (:skip-text? block)
+                   (and (:block/pre-block? current-block-data) (= block-level 1))))
       (let [prefix (if (and (:keep-bullets config/entry)
                             (not-empty (:block/content current-block-data)))
                      (str (apply str (concat (repeat (* (- block-level 1) 1) "\t"))) "+ ")
@@ -384,7 +489,7 @@
                                               (rm-page-properties)
                                               (rm-width-height)
                                               (rm-brackets)
-                                              (str prefix)))]
+                                              (apply-bullet-prefix prefix)))]
             (when (not= res-line "")
               (str res-line "\n\n"))))))))
 
@@ -411,14 +516,41 @@
   ([block-tree inline-tags]
    (first (parse-block-content-with-tags block-tree inline-tags))))
 
+(defn- title-block
+  "First block of a page that actually renders as text, i.e. skipping the
+   page properties pre-block and empty blocks."
+  [block-tree]
+  (->> block-tree
+       (remove #(or (get-in % [:data :block/pre-block?])
+                    (s/blank? (get-in % [:data :block/content]))))
+       first))
+
+(defn- with-journal-title
+  "A journal page is named after its date, which makes for a poor page title.
+   Use its first block instead and return [title block-tree]. The block is
+   dropped from the body when the title reproduces it in full, unless that
+   would leave the page with no content at all."
+  [page block-tree]
+  (if-not (true? (get page :block/journal?))
+    [nil block-tree]
+    (let [block (title-block block-tree)
+          {:keys [text lossless?]} (some-> block (get-in [:data :block/content]) derive-title)]
+      (if (nil? text)
+        [nil block-tree]
+        [text (if (and lossless?
+                       (or (seq (:children block)) (> (count block-tree) 1)))
+                (map #(if (= % block) (assoc % :skip-text? true) %) block-tree)
+                block-tree)]))))
+
 (defn parse-page-blocks
   [graph-db page]
   (let [first-block-id (get page :db/id)
-        block-tree (graph/get-block-tree graph-db first-block-id first-block-id 1)
+        raw-block-tree (graph/get-block-tree graph-db first-block-id first-block-id 1)
+        [title block-tree] (with-journal-title page raw-block-tree)
         ;; Parse content and collect inline tags
         [content-data inline-tags] (parse-block-content-with-tags block-tree [])
         ;; Generate metadata with inline tags merged in
-        meta-data (parse-meta-data page inline-tags)
+        meta-data (parse-meta-data page inline-tags title)
         page-data (str
                    (get meta-data :data)
                    content-data)]
@@ -453,8 +585,9 @@
         block-tree (graph/get-block-tree graph-db first-block-id first-block-id 1)
         public-ids (graph/get-public-block-ids graph-db first-block-id)
         filtered-tree (filter-public-blocks block-tree public-ids)
-        [content-data inline-tags] (parse-block-content-with-tags filtered-tree [])
-        meta-data (parse-meta-data page inline-tags)
+        [title titled-tree] (with-journal-title page filtered-tree)
+        [content-data inline-tags] (parse-block-content-with-tags titled-tree [])
+        meta-data (parse-meta-data page inline-tags title)
         page-data (str
                    (get meta-data :data)
                    content-data)]

@@ -26,6 +26,10 @@
     :default false]
    ["-d" "--delete-outputdir" "Delete output directory before exporting data"
     :default false]
+   [nil "--title-max-length" "Maximum length of a title derived from a journal page's first block"
+    :default 70
+    :required "LENGTH"
+    :parse-fn #(js/parseInt %)]
    [nil "--time-pattern" "Template Pattern for Time Strings"
     :default "yyyy-MM-dd"
     :required "PATTERN"]
