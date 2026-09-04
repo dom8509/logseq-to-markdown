@@ -3,7 +3,8 @@
   "version": "0.4.1",
   "description": "Export Logseq Graph to (Hugo) Markdown.",
   "scripts": {
-    "dev": "node index.mjs"
+    "dev": "node index.mjs",
+    "test": "nbb-logseq -cp src:test -m logseq-to-markdown.parser-test"
   },
   "dependencies": {
     "@logseq/nbb-logseq": "^1.2.173",
