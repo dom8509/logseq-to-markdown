@@ -319,7 +319,7 @@
                           :else "")
         add-bullet? (or (config/entry :keep-bullets) (not= level 1))
         main-indent (if add-bullet? "+ " "")
-        secondary-indent (if add-bullet? "\t" "")
+        secondary-indent (if add-bullet? "  " "")
         lines (s/split-lines string)
         indented-lines (map-indexed (fn [idx line]
                                       (if (zero? idx)
