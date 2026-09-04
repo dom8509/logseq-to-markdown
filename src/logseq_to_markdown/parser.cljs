@@ -4,6 +4,7 @@
             [logseq-to-markdown.fs :as fs]
             [logseq-to-markdown.utils :as utils]
             [logseq-to-markdown.graph :as graph]
+            [logseq-to-markdown.links :as links]
             [logseq-to-markdown.renderer.echarts :as echarts]
             [logseq-to-markdown.renderer.kroki :as kroki]))
 
@@ -184,34 +185,7 @@
 
 (defn parse-links
   [text]
-  (let [link-pattern #"\[\[(.*?)\]\]"
-        link-res (re-seq link-pattern text)
-        desc-link-pattern #"\[(.*?)\]\(\[\[(.*?)\]\]\)"
-        desc-link-res (re-seq desc-link-pattern text)]
-    (if (empty? desc-link-res)
-      (if (empty? link-res)
-        text
-        (reduce
-         #(let [current-text (first %2)
-                current-link (last %2)
-                namespace-pattern #"\[\[([^\/]*\/).*\]\]"
-                namespace-res (re-find namespace-pattern text)
-                namespace-link? (not-empty namespace-res)
-                link-text (or (and namespace-link? (config/entry :trim-namespaces)
-                                   (last (s/split current-link "/"))) current-link)
-                replaced-str (or (and (graph/page-exists? current-link) (str "[[[" link-text "]]]({{< ref \"/pages/" (fs/->filename current-link) "\" >}})"))
-                                 (str link-text))]
-            (s/replace %1 current-text replaced-str))
-         text
-         link-res))
-      (reduce #(let [current-text (first %2)
-                     current-link (last %2)
-                     link-text (nth %2 1)
-                     replaced-str (or (and (graph/page-exists? current-link) (str "[" link-text "]({{< ref \"/pages/" (fs/->filename current-link) "\" >}})"))
-                                      (str link-text))]
-                 (s/replace %1 current-text replaced-str))
-              text
-              desc-link-res))))
+  (links/parse-links text))
 
 (defn parse-namespaces
   [level text]
