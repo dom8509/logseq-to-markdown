@@ -285,20 +285,30 @@
       text
       (str (rm-brackets (s/replace text pattern ""))))))
 
+(defn indent-block
+  [level string]
+  (let [indentation-str (cond
+                          (config/entry :keep-bullets) (apply str (concat (repeat (* (- level 1) 1) "\t")))
+                          (not= level 1) (apply str (concat (repeat (* (- level 2) 1) "\t")))
+                          :else "")
+        add-bullet? (or (config/entry :keep-bullets) (not= level 1))
+        main-indent (if add-bullet? "+ " "")
+        secondary-indent (if add-bullet? "  " "")
+        lines (s/split-lines string)
+        indented-lines (map-indexed (fn [idx line]
+                                      (if (zero? idx)
+                                        (str indentation-str main-indent line)
+                                        (str indentation-str secondary-indent line)))
+                                    lines)]
+    (s/join "\n" indented-lines)))
+
 ;; Parse the text of the :block/content and convert it into markdown
 (defn parse-text
   [block]
   (let [current-block-data (:data block)
         block-level (:level block)]
-    (when (not (and (:block/pre-block? current-block-data) (= block-level 1)))
-      (let [prefix (if (and (:keep-bullets config/entry)
-                            (not-empty (:block/content current-block-data)))
-                     (str (apply str (concat (repeat (* (- block-level 1) 1) "\t"))) "+ ")
-                     (if (and (not= block-level 1)
-                              (not-empty (:block/content current-block-data)))
-                       (str (apply str (concat (repeat (* (- block-level 2) 1) "\t"))) "+ ")
-                       (str "")))
-            block-content (get current-block-data :block/content)
+    (when (and (not (and (:block/pre-block? current-block-data) (= block-level 1))) (not-empty (:block/content current-block-data)))
+      (let [block-content (get current-block-data :block/content)
             marker? (not (nil? (get current-block-data :block/marker)))]
         (when (or (not marker?) (true? (config/entry :export-tasks)))
           (let [res-line (s/trim-newline (->> (str block-content)
@@ -319,7 +329,7 @@
                                               (rm-page-properties)
                                               (rm-width-height)
                                               (rm-brackets)
-                                              (str prefix)))]
+                                              (indent-block block-level)))]
             (when (not= res-line "")
               (str res-line "\n\n"))))))))
 
